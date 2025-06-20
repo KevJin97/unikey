@@ -189,6 +189,7 @@ void Device::disable_device()
 void Device::monitor_data()
 {
 	const unsigned flags[2] = { LIBEVDEV_READ_FLAG_NORMAL | LIBEVDEV_READ_FLAG_BLOCKING, LIBEVDEV_READ_FLAG_SYNC };
+	bool triggered = false;
 
 	while (this->device_status.load(std::memory_order_acquire))
 	{
@@ -210,7 +211,6 @@ void Device::monitor_data()
 								
 								if (*this->p_key_state == Device::activation_cmd)	// Trigger activation
 								{
-									this->p_key_state->clear();
 									Device::trigger_activation();
 								}
 								case EV_REL:
