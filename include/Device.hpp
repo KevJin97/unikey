@@ -48,6 +48,7 @@ class Device
 
 	private:
 		unsigned event_num;
+		std::mutex wait_lock;
 		struct libevdev* dev;
 		std::vector<BitField> enabled_events;
 		BitField* p_key_state;
@@ -77,6 +78,7 @@ class Device
 		
 		BitField return_enabled_event_codes(unsigned type);
 		void process_event(const struct input_event& ev);
+		void wait(std::atomic_bool& sig);
 		void disable_device();
 		void enable_device();
 };
@@ -110,7 +112,7 @@ inline void Device::watchdog()
 			{
 				{
 					std::unique_lock<std::mutex> lock(Device::global_lock);
-					cv.wait_for(lock, Device::period,
+					Device::cv.wait_for(lock, Device::period,
 					[]
 					{
 						return (Device::is_grabbed.load(std::memory_order_acquire) == false) | (Device::pending_ev_num.load(std::memory_order_acquire) != 0);
