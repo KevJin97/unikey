@@ -3,9 +3,24 @@
 	"tasks":
 	[
 		{
-			"label": "build-debug",
+			"label": "build-debug-make",
 			"type": "shell",
-			"command": "cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make"
+			"command": "cmake -S . -B build/make -DCMAKE_BUILD_TYPE=Debug && cmake --build build/make"
+		},
+		{
+			"label": "release-compile-make",
+			"type": "shell",
+			"command": "cmake -S . -B bin/make -DCMAKE_BUILD_TYPE=Release && cmake --build bin/make"
+		},
+		{
+			"label": "build-debug-ninja",
+			"type": "shell",
+			"command": "cmake -S . -B build/ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build/ninja"
+		},
+		{
+			"label": "release-compile-ninja",
+			"type": "shell",
+			"command": "cmake -S . -B bin/ninja -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build bin/ninja"
 		}
 	]
 }
