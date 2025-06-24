@@ -5,12 +5,35 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug: CMake Project",
-			"program": "${workspaceFolder}/build/unikey",
-			"args": [""],
+			"name": "Debug: CMake Project (Make)",
+			"program": "${workspaceFolder}/build/keyboard-lock",
 			"cwd": "${workspaceFolder}",
-			"preLaunchTask": "build-debug"
+			"preLaunchTask": "build-debug-make"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Release: CMake Project (Make)",
+			"program": "${workspaceFolder}/build/keyboard-lock",
+			"cwd": "${workspaceFolder}",
+			"preLaunchTask": "release-compile-make"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug: CMake Project (Ninja)",
+			"program": "${workspaceFolder}/build/keyboard-lock",
+			"cwd": "${workspaceFolder}",
+			"preLaunchTask": "build-debug-ninja"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Release: CMake Project (Ninja)",
+			"program": "${workspaceFolder}/build/keyboard-lock",
+			"cwd": "${workspaceFolder}",
+			"preLaunchTask": "release-compile-ninja"
 		}
+		
 	]
 }
-
