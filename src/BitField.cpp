@@ -72,7 +72,7 @@ bool BitField::operator==(const BitField& bitfield)
 {
 	std::size_t n = 0;
 	const std::vector<uint64_t>* compare[2] = { &this->bits, &bitfield.bits };
-	bool larger = (this->bits.size() >= bitfield.bits.size()) ? true : false;
+	bool larger = (this->bits.size() >= bitfield.bits.size()) ? false : true;
 
 	for (; n < compare[!larger]->size(); ++n)
 	{
