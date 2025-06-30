@@ -43,8 +43,6 @@ class Device
 	// SHARED DATA
 	static inline Shared_Cyclic_Queue<input_event> queue;
 	static inline BitField shared_key_state;
-	static inline struct rel_data shared_rel_state;
-	static inline struct abs_data shared_abs_state;
 	static inline std::atomic_uint32_t pending_ev_num{0};
 	static inline std::atomic_uint32_t available_devices{0};
 	static inline std::atomic_bool is_grabbed{false};
@@ -67,8 +65,6 @@ class Device
 		std::atomic_bool device_status;	// Enabled or disabled
 
 		void keyboard_monitor();
-		void mouse_monitor();
-		void touchpad_monitor();
 
 	public:
 	// CONSTRUCTOR(S)

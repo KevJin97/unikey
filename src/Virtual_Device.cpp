@@ -47,10 +47,13 @@ void Virtual_Device::init_device(std::vector<BitField>& enabled_codes)
 	struct libevdev* dev = libevdev_new();
 	libevdev_set_name(dev, Virtual_Device::virt_dev_name.c_str());
 	void* p_data;
-
-	for (std::size_t type = 0; type < EV_CNT; ++type)
+	for (std::size_t type = 0, code = 0; code < SYN_CNT; ++code)
 	{
-		for (std::size_t code = 0; code < event_count(type); ++code)
+		libevdev_enable_event_code(dev, type, code, p_data);
+	}
+	for (std::size_t type = 1; type < EV_CNT; ++type)
+	{
+		for (std::size_t code = 0; code <= libevdev_event_type_get_max(type); ++code)
 		{
 			if (enabled_codes[type].contains(code))
 			{

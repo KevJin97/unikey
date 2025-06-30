@@ -7,11 +7,12 @@
 
 inline std::atomic_bool broadcast_service_status{false};
 
-extern void broadcast_service();
-extern void unikey_server();
-extern void unikey_client();
-extern int change_group_permissions();
-extern int return_to_original_group_permissions(int gid);
-extern std::vector<BitField> initialize_all_devices(std::vector<Device*>& devices);
+void broadcast_service();
+void unikey_server();
+void unikey_client();
+int change_group_permissions();
+int return_to_original_group_permissions(int gid);
+std::vector<BitField> initialize_all_devices(std::vector<Device*>& devices);
+
 
 #endif // UNIKEY_HPP

@@ -1,7 +1,7 @@
 #include "Device.hpp"
 #include "BitField.hpp"
-#include "Shared_Cyclic_Queue.hpp"
-
+//#include "Shared_Cyclic_Queue.hpp"
+#include <iostream>
 #include "libevdev/libevdev.h"
 
 #include <atomic>
@@ -49,20 +49,8 @@ Device::Device(unsigned event_num)
 				}
 			}
 		}
-		
-		if (libevdev_has_event_type(this->dev, EV_REL))	// To keep track of EV_REL inputs
-		{
-			this->p_state = (void*)new struct rel_data;
-			this->device_category = MOUSE;
-			this->enable_device();
-		}
-		else if (libevdev_has_event_type(this->dev, EV_ABS))
-		{
-			this->p_state = (void*)new struct abs_data;
-			this->device_category = TOUCHPAD;
-			this->enable_device();
-		}
-		else if (libevdev_has_event_type(this->dev, EV_KEY)) // To keep track of EV_KEY inputs	
+
+		if (libevdev_has_event_type(this->dev, EV_KEY)) // To keep track of EV_KEY inputs	
 		{
 			this->p_state = (void*)new BitField;
 			this->device_category = KEYBOARD;
@@ -77,11 +65,9 @@ Device::Device(unsigned event_num)
 
 	if (Device::available_devices.load(std::memory_order_acquire) == 0)	// If watchdog loop doesn't exist, initialize it
 	{
+		Device::available_devices.fetch_add(1, std::memory_order_acq_rel);
 		Device::grab_state_timeout = std::thread(&Device::watchdog);
 	}
-
-	Device::available_devices.fetch_add(1, std::memory_order_acq_rel);
-	Device::available_devices.notify_one();
 }
 
 Device::~Device()
@@ -97,13 +83,6 @@ Device::~Device()
 			case KEYBOARD:
 				delete (BitField*)this->p_state;
 				break;
-
-			case MOUSE:
-				delete (struct rel_data*)this->p_state;
-				break;
-
-			case TOUCHPAD:
-				delete (struct abs_data*)this->p_state;
 
 			default:
 				break;
@@ -160,6 +139,7 @@ void Device::stop_monitoring()
 
 bool Device::trigger_activation()
 {
+	std::cout << "Triggered" << std::endl;
 	if (Device::is_monitoring.load(std::memory_order_acquire) == false)
 	{
 		Device::begin_monitoring();
@@ -185,14 +165,6 @@ void Device::process_event(Device_Type dev_type)
 			Device::shared_key_state |= *(BitField*)this->p_state;
 			break;
 
-		case MOUSE:
-			Device::shared_rel_state |= *(struct rel_data*)this->p_state;
-			break;
-
-		case TOUCHPAD:
-			Device::shared_abs_state |= *(struct abs_data*)this->p_state;
-			break;
-
 		default:
 			break;
 	}
@@ -209,14 +181,6 @@ void Device::enable_device()
 			this->data_handler = std::thread(std::bind(&Device::keyboard_monitor, this));
 			break;
 
-		case MOUSE:
-			this->data_handler = std::thread(std::bind(&Device::mouse_monitor, this));
-			break;
-
-		case TOUCHPAD:
-			this->data_handler = std::thread(std::bind(&Device::touchpad_monitor, this));
-			break;
-		
 		default:
 			break;
 	}
@@ -262,6 +226,7 @@ void Device::keyboard_monitor()
 
 					case EV_KEY:	// Keep track of which keys have been pressed
 						(ev.value == 0) ? state->remove(ev.code) : state->insert(ev.code);
+						(ev.value == 0) ? std::cout << "Released: " << libevdev_event_code_get_name(ev.type, ev.code) << std::endl : std::cout << "Pressed: " << libevdev_event_code_get_name(ev.type, ev.code) << std::endl;
 						break;
 
 					default:
@@ -310,6 +275,7 @@ void Device::keyboard_monitor()
 			{
 				libevdev_grab(this->dev, LIBEVDEV_GRAB);
 				action_pending = false;
+				std::cout << "Grab Successful" << std::endl;
 			}
 		}
 		else if (action_pending && (Device::is_grabbed.load(std::memory_order_acquire) == false))
@@ -317,148 +283,14 @@ void Device::keyboard_monitor()
 			// Ungrabbing can be performed without restriction
 			libevdev_grab(this->dev, LIBEVDEV_UNGRAB);
 			action_pending = false;
-		}
-	}
-}
-
-void Device::mouse_monitor()
-{
-	const libevdev_read_flag flags[2] = { LIBEVDEV_READ_FLAG_NORMAL, LIBEVDEV_READ_FLAG_SYNC };
-	struct rel_data* state = (struct rel_data*)this->p_state;
-	bool action_pending = false;
-	bool old_state = false;
-
-	while (this->device_status.load(std::memory_order_acquire))
-	{
-		if (old_state != Device::is_grabbed.load(std::memory_order_acquire))	// If Device::trigger_activation() was called, then begin grab attempts
-		{
-			old_state = Device::is_grabbed.load(std::memory_order_acquire);
-			action_pending = true;
-		}
-
-		struct input_event ev;
-		switch (libevdev_next_event(this->dev, flags[0], &ev))	// Read device state
-		{
-			case LIBEVDEV_READ_STATUS_SUCCESS:	// Successful read of device state
-				switch(ev.type)
-				{
-					case EV_SYN:	// If input source has been successfully grabbed, begin processing events
-						if ((action_pending == false) && Device::is_grabbed.load(std::memory_order_acquire) && (ev.value == SYN_REPORT))
-						{
-							this->process_event(MOUSE);
-						}
-						break;
-
-					case EV_REL:
-					case EV_KEY:
-					default:
-						break;
-				}
-				break;
-			
-			case LIBEVDEV_READ_STATUS_SYNC:
-				while (libevdev_next_event(this->dev, flags[1], &ev) == LIBEVDEV_READ_STATUS_SYNC)
-				{
-
-				}
-				break;
-			
-			case -EAGAIN:
-				break;
-			
-			default:	// This should never happen. End loop if it does.
-				this->device_status.store(false, std::memory_order_release);
-				break;
-		}
-
-		if (action_pending && (Device::is_grabbed.load(std::memory_order_acquire) == true) && (libevdev_has_event_pending(this->dev) == 0))
-		{
-			// Only grab keyboard if no inputs are pressed.
-			if (*state == no_input)
-			{
-				libevdev_grab(this->dev, LIBEVDEV_GRAB);
-				action_pending = false;
-			}
-		}
-		else if (action_pending && (Device::is_grabbed.load(std::memory_order_acquire) == false))
-		{
-			// Ungrabbing can be performed without restriction
-			libevdev_grab(this->dev, LIBEVDEV_UNGRAB);
-			action_pending = false;
-		}
-	}
-}
-
-void Device::touchpad_monitor()
-{
-	const libevdev_read_flag flags[2] = { LIBEVDEV_READ_FLAG_NORMAL, LIBEVDEV_READ_FLAG_SYNC };
-	struct abs_data* state = (struct abs_data*)this->p_state;
-	bool action_pending = false;
-	bool old_state = false;
-
-	while (this->device_status.load(std::memory_order_acquire))
-	{
-		if (old_state != Device::is_grabbed.load(std::memory_order_acquire))	// If Device::trigger_activation() was called, then begin grab attempts
-		{
-			old_state = Device::is_grabbed.load(std::memory_order_acquire);
-			action_pending = true;
-		}
-
-		struct input_event ev;
-		switch (libevdev_next_event(this->dev, flags[0], &ev))	// Read device state
-		{
-			case LIBEVDEV_READ_STATUS_SUCCESS:	// Successful read of device state
-				switch(ev.type)
-				{
-					case EV_SYN:	// If input source has been successfully grabbed, begin processing events
-						if ((action_pending == false) && Device::is_grabbed.load(std::memory_order_acquire) && (ev.value == SYN_REPORT))
-						{
-							this->process_event(MOUSE);
-						}
-						break;
-
-					case EV_ABS:
-					case EV_KEY:
-					default:
-						break;
-				}
-				break;
-			
-			case LIBEVDEV_READ_STATUS_SYNC:
-				while (libevdev_next_event(this->dev, flags[1], &ev) == LIBEVDEV_READ_STATUS_SYNC)
-				{
-
-				}
-				break;
-			
-			case -EAGAIN:
-				break;
-			
-			default:	// This should never happen. End loop if it does.
-				this->device_status.store(false, std::memory_order_release);
-				break;
-		}
-
-		if (action_pending && (Device::is_grabbed.load(std::memory_order_acquire) == true) && (libevdev_has_event_pending(this->dev) == 0))
-		{
-			// Only grab keyboard if no inputs are pressed.
-			if (*state == no_input)
-			{
-				libevdev_grab(this->dev, LIBEVDEV_GRAB);
-				action_pending = false;
-			}
-		}
-		else if (action_pending && (Device::is_grabbed.load(std::memory_order_acquire) == false))
-		{
-			// Ungrabbing can be performed without restriction
-			libevdev_grab(this->dev, LIBEVDEV_UNGRAB);
-			action_pending = false;
+			std::cout << "Ungrabbed Successfully" << std::endl;
 		}
 	}
 }
 
 void Device::watchdog()
 {
+	std::cout << "Watchdog started successfully" << std::endl;
 	// Watchdog Loop
 	while (Device::available_devices.load(std::memory_order_acquire) != 0)
 	{
@@ -466,6 +298,7 @@ void Device::watchdog()
 		{
 			if (Device::pending_ev_num.load(std::memory_order_acquire) == 0)
 			{
+				std::cout << "Watchdog: Timer started" << std::endl;
 				{
 					std::unique_lock<std::mutex> lock(Device::global_lock);
 					Device::cv.wait_for(lock, Device::period,
@@ -476,21 +309,25 @@ void Device::watchdog()
 				}
 				if (Device::pending_ev_num.load(std::memory_order_acquire) == 0 && Device::is_grabbed.load(std::memory_order_acquire) == true)
 				{
+					std::cout << "Watchdog: Releasing inputs" << std::endl;
 					Device::trigger_activation();
 				}
 			}
 			else
 			{
+				std::cout << "Watchdog: Processing inputs" << std::endl;
 				while (Device::pending_ev_num.load(std::memory_order_acquire) != 0)
 				{
-					Device::p_event_processor(Device::queue.pop());
+					//Device::p_event_processor(Device::queue.pop());
 					Device::pending_ev_num.fetch_sub(1, std::memory_order_acq_rel);
 				}
 			}
 		}
 		else
 		{
+			std::cout << "Watchdog: Waiting..." << std::endl;
 			Device::is_grabbed.wait(false, std::memory_order_acquire);
+			std::cout << "Watchdog: Triggered" << std::endl;
 		}
 	}
 }

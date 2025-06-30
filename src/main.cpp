@@ -16,7 +16,6 @@ int main()
 
 	// std::thread server_process(unikey_server);
 	return_to_original_group_permissions(orig_groupID);
-	/*
 	for (std::size_t n = 0; n < device_list.size(); ++n)
 	{
 		if (n != 3)
@@ -25,21 +24,18 @@ int main()
 			device_list[n]->disable_device();
 		}
 	}
-	*/
+
 	std::string input;
-
-	while (input != "exit")
+	for (;;)
 	{
-		std::cout << "Command: ";
 		std::cin >> input;
-
 		if (input == "trigger")
 		{
-			std::cout << (Device::trigger_activation() ? "Devices have been activated" : "Devices have been deactivated") << std::endl;
+			Device::trigger_activation();
 		}
-		else if (input == "monitor")
+		else if (input == "quit")
 		{
-			Device::begin_monitoring();
+			break;
 		}
 	}
 	// server_process.join();

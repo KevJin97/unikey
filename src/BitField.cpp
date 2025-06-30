@@ -122,7 +122,6 @@ BitField BitField::operator&(const BitField& bit)
 	BitField new_field;
 	new_field.bits.resize(fields[larger]->bits.size());
 
-
 	for (; n < fields[!larger]->bits.size(); ++n)
 	{
 		new_field.bits[n] = (fields[larger]->bits[n] & fields[!larger]->bits[n]);

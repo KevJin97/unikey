@@ -65,9 +65,9 @@ std::vector<BitField> initialize_all_devices(std::vector<Device*>& devices)
 	{
 		for (std::size_t type = 0; type < EV_CNT; ++type)
 		{
-			if (devices[n]->return_enabled_event_codes(type).size() != 0)
+			if (devices[n]->return_enabled_event_codes(type).vector_size() != 0)
 			{
-				available_inputs[type] = available_inputs[type] & devices[n]->return_enabled_event_codes(type);
+				available_inputs[type] &= devices[n]->return_enabled_event_codes(type);
 			}
 		}
 	}
