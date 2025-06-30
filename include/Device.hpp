@@ -23,9 +23,16 @@
 #include "Shared_Cyclic_Queue.hpp"
 
 // Currently supporting event types for signals only
-const BitField default_activation_key({ KEY_LEFTMETA, KEY_LEFTSHIFT, KEY_SPACE });
+inline const BitField default_activation_key({ KEY_LEFTMETA, KEY_LEFTSHIFT, KEY_SPACE });
+inline const BitField no_input;
 
-unsigned event_count(unsigned event_type);
+enum Device_Type
+{
+	UNKOWN,
+	KEYBOARD,
+	MOUSE,
+	TOUCHPAD
+};
 
 class Device
 {
@@ -35,6 +42,9 @@ class Device
 
 	// SHARED DATA
 	static inline Shared_Cyclic_Queue<input_event> queue;
+	static inline BitField shared_key_state;
+	static inline struct rel_data shared_rel_state;
+	static inline struct abs_data shared_abs_state;
 	static inline std::atomic_uint32_t pending_ev_num{0};
 	static inline std::atomic_uint32_t available_devices{0};
 	static inline std::atomic_bool is_grabbed{false};
@@ -47,18 +57,18 @@ class Device
 	static void watchdog();
 
 	private:
+	// PRIVATE MEMBERS
 		unsigned event_num;
-		std::mutex wait_lock;
 		struct libevdev* dev;
-		std::vector<BitField> enabled_events;
-		BitField* p_key_state;
-		BitField* p_cursor_state;
+		BitField enabled_events[EV_CNT];
+		void* p_state;
+		Device_Type device_category;
 		std::thread data_handler;
 		std::atomic_bool device_status;	// Enabled or disabled
 
-	// PRIVATE INTERFACE
-		void monitor_data();
-		void synchronize(struct input_event& ev);
+		void keyboard_monitor();
+		void mouse_monitor();
+		void touchpad_monitor();
 
 	public:
 	// CONSTRUCTOR(S)
@@ -74,69 +84,12 @@ class Device
 		
 		static void begin_monitoring();
 		static void stop_monitoring();
-		static bool trigger_activation();	// Manually trigger
+		static bool trigger_activation();	// Global Trigger
 		
 		BitField return_enabled_event_codes(unsigned type);
-		void process_event(const struct input_event& ev);
-		void wait(std::atomic_bool& sig);
+		void process_event(Device_Type dev_type);
 		void disable_device();
 		void enable_device();
 };
-
-
-// IMPLEMENTATION
-
-inline void Device::watchdog()
-{
-	// When Device::available_devices hits 0, wake the watchdog loop so that it can break the loop
-	std::thread cleanup(
-		[]
-		{ 
-			unsigned old;
-			while ((old = Device::available_devices.load(std::memory_order_acquire)) != 0)
-			{
-				Device::available_devices.wait(old, std::memory_order_acquire);
-			}
-			Device::is_grabbed.store(true, std::memory_order_release);
-			Device::is_grabbed.notify_all();
-		}
-	);
-	cleanup.detach();
-
-	// Watchdog Loop
-	while (Device::available_devices.load(std::memory_order_acquire) != 0)
-	{
-		if (Device::is_grabbed.load(std::memory_order_acquire))
-		{
-			if (Device::pending_ev_num.load(std::memory_order_acquire) == 0)
-			{
-				{
-					std::unique_lock<std::mutex> lock(Device::global_lock);
-					Device::cv.wait_for(lock, Device::period,
-					[]
-					{
-						return (Device::is_grabbed.load(std::memory_order_acquire) == false) | (Device::pending_ev_num.load(std::memory_order_acquire) != 0);
-					});
-				}
-				if (Device::pending_ev_num.load(std::memory_order_acquire) == 0 && Device::is_grabbed.load(std::memory_order_acquire) == true)
-				{
-					Device::trigger_activation();
-				}
-			}
-			else
-			{
-				while (Device::pending_ev_num.load(std::memory_order_acquire) != 0)
-				{
-					Device::p_event_processor(Device::queue.pop());
-					Device::pending_ev_num.fetch_sub(1, std::memory_order_acq_rel);
-				}
-			}
-		}
-		else
-		{
-			Device::is_grabbed.wait(false, std::memory_order_acquire);
-		}
-	}
-}
 
 #endif // DEVICE_HPP
