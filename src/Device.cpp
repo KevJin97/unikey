@@ -15,24 +15,6 @@
 
 #define EVER ;;
 
-unsigned event_count(unsigned event_type)
-{
-	switch(event_type)
-	{
-		case EV_SYN: return SYN_CNT;
-		case EV_KEY: return KEY_CNT;
-		case EV_REL: return REL_CNT;
-		case EV_ABS: return ABS_CNT;
-		case EV_SW: return SW_CNT;
-		case EV_MSC: return MSC_CNT;
-		case EV_LED: return LED_CNT;
-		case EV_SND: return SND_CNT;
-		case EV_REP: return REP_CNT;
-		case EV_FF: return FF_CNT;
-		default: return 0;
-	}
-}
-
 Device::Device(unsigned event_num)
 {
 	this->event_num = event_num;
@@ -55,7 +37,7 @@ Device::Device(unsigned event_num)
 		{
 			if (libevdev_has_event_type(this->dev, type))
 			{
-				for (unsigned code = 0; code < event_count(type); ++code)
+				for (unsigned code = 0; code <= libevdev_event_type_get_max(type); ++code)
 				{
 					if (libevdev_has_event_code(this->dev, type, code))
 					{
@@ -158,9 +140,9 @@ BitField Device::return_enabled_event_codes(unsigned int type)
 
 void Device::process_event(const struct input_event& ev)
 {
-	Device::queue.push(ev);
+	//Device::queue.push(ev);
 	Device::pending_ev_num.fetch_add(1,std::memory_order_acq_rel);
-	Device::pending_ev_num.notify_one();
+	 Device::pending_ev_num.notify_one();
 }
 
 void Device::wait(std::atomic_bool& sig)
