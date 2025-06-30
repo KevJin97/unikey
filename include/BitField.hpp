@@ -21,7 +21,9 @@ class BitField
 		void remove(uint64_t index);
 		void clear();
 		void wipe();
-		std::size_t size() const;
+		std::size_t max_bit_size() const;
+		std::size_t max_byte_size() const;
+		std::size_t vector_size() const;
 
 		BitField& operator=(const BitField& bit);
 		bool operator==(const BitField& bit);

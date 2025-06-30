@@ -65,9 +65,19 @@ void BitField::wipe()
 	}
 }
 
-std::size_t BitField::size() const
+std::size_t BitField::max_bit_size() const
 {
 	return this->bits.size() * BITSIZE;
+}
+
+std::size_t BitField::max_byte_size() const
+{
+	return this->bits.size() * BITSIZE / 8;
+}
+
+std::size_t BitField::vector_size() const
+{
+	return this->bits.size();
 }
 
 BitField& BitField::operator= (const BitField& bitfield)
