@@ -20,6 +20,7 @@ class BitField
 		bool contains(uint64_t index);
 		void remove(uint64_t index);
 		void clear();
+		void wipe();
 		std::size_t size() const;
 
 		BitField& operator=(const BitField& bit);
