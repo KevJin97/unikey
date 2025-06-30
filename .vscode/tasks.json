@@ -15,7 +15,12 @@
 		{
 			"label": "build-debug-ninja",
 			"type": "shell",
-			"command": "cmake -S . -B build/ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build/ninja"
+			"command": "cmake -S . -B build/ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build/ninja",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		},
 		{
 			"label": "release-compile-ninja",
