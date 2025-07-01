@@ -81,7 +81,7 @@ void Shared_Cyclic_Queue<Type>::push(const Type& data)
 
 template<typename Type>
 Type Shared_Cyclic_Queue<Type>::pop()
-{
+{	
 	this->num_in_q.wait(0, std::memory_order_acquire);	// Ensures that running pop() won't interrupt setting value at index[1]
 	
 	// Get index[0] value and increment by 1. If out-of-bounds, cycle to 0

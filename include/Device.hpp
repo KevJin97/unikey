@@ -38,7 +38,7 @@ class Device
 {
 	static inline void (*p_event_processor)(const struct input_event&) = NULL;
 	static inline BitField activation_cmd = default_activation_key;	// This command initiates the communication
-	static inline std::chrono::duration<int64_t> period = std::chrono::seconds(30);
+	static inline std::chrono::steady_clock::duration period = std::chrono::seconds(30);
 
 	// SHARED DATA
 	static inline Shared_Cyclic_Queue<input_event> queue;
