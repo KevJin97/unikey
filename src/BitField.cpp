@@ -90,7 +90,7 @@ bool BitField::operator==(const BitField& bitfield)
 {
 	std::size_t n = 0;
 	const BitField* compare[2] = { this, &bitfield };
-	bool larger = (this->bits.size() >= bitfield.bits.size()) ? false : true;
+	bool larger = (this->bits.size() < bitfield.bits.size());
 
 	for (; n < compare[!larger]->bits.size(); ++n)
 	{
@@ -117,7 +117,7 @@ bool BitField::operator!=(const BitField& bitfield)
 BitField BitField::operator&(const BitField& bit)
 {
 	const BitField* fields[2] = { this, &bit };
-	bool larger = (this->bits.size() >= bit.bits.size()) ? false : true;
+	bool larger = (this->bits.size() < bit.bits.size());
 	std::size_t n = 0;
 	BitField new_field;
 	new_field.bits.resize(fields[larger]->bits.size());
@@ -138,7 +138,7 @@ BitField BitField::operator&(const BitField& bit)
 BitField BitField::operator|(const BitField& bit)
 {
 	const BitField* fields[2] = { this, &bit };
-	bool larger = (this->bits.size() >= bit.bits.size()) ? false : true;
+	bool larger = (this->bits.size() < bit.bits.size());
 	BitField new_field = *fields[larger];
 
 	for (std::size_t n = 0; n < fields[!larger]->bits.size(); ++n)
@@ -152,7 +152,7 @@ BitField BitField::operator|(const BitField& bit)
 BitField BitField::operator^(const BitField& bit)
 {
 	const BitField* fields[2] = { this, &bit };
-	bool larger = (this->bits.size() >= bit.bits.size()) ? false : true;
+	bool larger = (this->bits.size() < bit.bits.size());
 	BitField new_field = *fields[larger];
 
 	for (std::size_t n = 0; n < fields[!larger]->bits.size(); ++n)
