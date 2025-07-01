@@ -119,7 +119,9 @@ BitField BitField::operator&(const BitField& bit)
 	const BitField* fields[2] = { this, &bit };
 	bool larger = (this->bits.size() >= bit.bits.size()) ? false : true;
 	std::size_t n = 0;
-	BitField new_field(fields[!larger]->bits.size());
+	BitField new_field;
+	new_field.bits.resize(fields[larger]->bits.size());
+
 
 	for (; n < fields[!larger]->bits.size(); ++n)
 	{
