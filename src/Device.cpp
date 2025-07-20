@@ -19,7 +19,7 @@ Device::Device(unsigned event_num)
 	this->dev = NULL;
 	this->p_state = NULL;
 
-	int fd = open(("/dev/input/event" + std::to_string(event_num)).c_str(), O_RDONLY);
+	int fd = open(("/dev/input/event" + std::to_string(event_num)).c_str(), O_RDONLY | O_NONBLOCK);
 	if (libevdev_new_from_fd(fd, &this->dev) < 0)
 	{
 		// Error while creating device
