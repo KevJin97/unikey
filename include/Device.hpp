@@ -1,11 +1,6 @@
 #ifndef DEVICE_HPP
 #define DEVICE_HPP
 
-#include <chrono>
-#include <cstdint>
-#include <linux/input-event-codes.h>
-#include <mutex>
-#include <condition_variable>
 #include <vector>
 #include <atomic>
 #include <thread>
@@ -13,7 +8,10 @@
 #include <assert.h>
 #include <fcntl.h>
 
+#include <linux/input-event-codes.h>
 #include <linux/input.h>
+#include <sys/eventfd.h>
+#include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -22,74 +20,55 @@
 #include "BitField.hpp"
 #include "Shared_Cyclic_Queue.hpp"
 
-// Currently supporting event types for signals only
-inline const BitField default_activation_key({ KEY_LEFTMETA, KEY_LEFTSHIFT, KEY_SPACE });
-inline const BitField no_input;
-
-enum Device_Type
-{
-	UNKOWN,
-	KEYBOARD,
-	MOUSE,
-	TOUCHPAD
-};
-
 class Device
 {
-	static inline void (*p_event_processor)(const struct input_event&) = NULL;
-	static inline BitField activation_cmd = default_activation_key;	// This command initiates the communication
-	static inline std::chrono::steady_clock::duration period = std::chrono::seconds(30);
+	protected:
+		static inline void (*p_event_processor)(const struct input_event&) = nullptr;
+		static inline BitField activation_cmd{{ KEY_LEFTMETA, KEY_LEFTSHIFT, KEY_SPACE }};	// This command initiates the communication
+		static inline unsigned period = 30;
 
 	// SHARED DATA
-	static inline Shared_Cyclic_Queue<input_event> queue;
-	static inline BitField shared_key_state;
-	static inline struct rel_data shared_rel_state;
-	static inline struct abs_data shared_abs_state;
-	static inline std::atomic_uint32_t pending_ev_num{0};
-	static inline std::atomic_uint32_t available_devices{0};
-	static inline std::atomic_bool is_grabbed{false};
-	static inline std::atomic_bool is_monitoring{false};
+		static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+		static inline std::atomic_uint32_t active_devices{0};
+		static inline Shared_Cyclic_Queue<input_event> queue;
+		static inline BitField shared_key_state{KEY_CNT};
+		static struct rel_data shared_rel_state;
+		static struct abs_data shared_abs_state;
+		static inline std::atomic_uint32_t pending_events_to_process{0};
+		static inline std::atomic_bool is_grabbed{true};
+		static inline std::atomic_bool is_record{false};
+		static inline std::atomic_bool is_exit{false};
 
-	static inline std::condition_variable cv;
-	static inline std::mutex global_lock;
+		static inline std::thread watchdog_thread;
+		static void watchdog_process();
 
-	static inline std::thread grab_state_timeout;
-	static void watchdog();
-
-	private:
-	// PRIVATE MEMBERS
-		unsigned event_num;
+	protected:
+	// PROTECTED MEMBERS
 		struct libevdev* dev;
-		BitField enabled_events[EV_CNT];
-		void* p_state;
-		Device_Type device_category;
-		std::thread data_handler;
-		std::atomic_bool device_status;	// Enabled or disabled
+		bool is_active;
+		std::thread input_monitor_process;
 
-		void keyboard_monitor();
-		void mouse_monitor();
-		void touchpad_monitor();
+		virtual void input_monitor() = 0;
 
 	public:
 	// CONSTRUCTOR(S)
-		Device(unsigned event_num);
+		Device();
 
 	// DESTRUCTOR
-		~Device();
+		virtual ~Device() = 0;
 
 	// PUBLIC INTERFACE
+		static Device* create_device(const std::string& event_path);
 		static void set_event_processor(void (**func_ptr)(const struct input_event&));
-		static void set_timeout_length(std::chrono::seconds secs);
+		static void init_watchdog();
+		static void set_timeout_length(unsigned secs);
 		static void set_activation_cmd();
-		
-		static void begin_monitoring();
-		static void stop_monitoring();
-		static bool trigger_activation();	// Global Trigger
+		static void trigger_activation();	// Global Trigger
+		static void wait_to_exit();
+		static void exit();
 		
 		BitField return_enabled_event_codes(unsigned type);
-		void process_event(Device_Type dev_type);
-		void disable_device();
-		void enable_device();
+		void toggle_device();
 };
 
 #endif // DEVICE_HPP
