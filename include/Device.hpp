@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <fcntl.h>
 
+#include <iostream>
+
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
 #include <sys/eventfd.h>
@@ -18,57 +20,56 @@
 #include <libevdev/libevdev.h>
 
 #include "BitField.hpp"
-#include "Shared_Cyclic_Queue.hpp"
+#include "Cyclic_Queue.hpp"
+
+// TODO: implement shared memory to modify is_grabbed and is_exit values externally
+
+inline void print_event(struct input_event& ev)
+{
+	std::cout << libevdev_event_code_get_name(ev.type, ev.code) << ',' << ev.value << '\t';
+}
 
 class Device
 {
-	protected:
-		static inline void (*p_event_processor)(const struct input_event&) = nullptr;
-		static inline BitField activation_cmd{{ KEY_LEFTMETA, KEY_LEFTSHIFT, KEY_SPACE }};	// This command initiates the communication
-		static inline unsigned period = 30;
+	static inline void (*event_process)(struct input_event&) = print_event;
+	static inline Cyclic_Queue global_queue;
+	static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
+	static inline std::vector<Device*> device_objects;
+	static inline std::thread watchdog_thread;
+	static inline unsigned timeout_length = 30000;
+	static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	static inline int exit_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	static inline std::atomic_uint32_t active_devices{0};
+	static inline std::atomic_uint32_t pending_events{0};
+	static inline std::atomic_bool is_grabbed{false};
+	static inline std::atomic_bool is_exit{false};
 
-	// SHARED DATA
-		static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-		static inline std::atomic_uint32_t active_devices{0};
-		static inline Shared_Cyclic_Queue<input_event> queue;
-		static inline BitField shared_key_state{KEY_CNT};
-		static struct rel_data shared_rel_state;
-		static struct abs_data shared_abs_state;
-		static inline std::atomic_uint32_t pending_events_to_process{0};
-		static inline std::atomic_bool is_grabbed{true};
-		static inline std::atomic_bool is_record{false};
-		static inline std::atomic_bool is_exit{false};
+	static void watchdog_process();
 
-		static inline std::thread watchdog_thread;
-		static void watchdog_process();
+	private:
+		struct libevdev* dev = nullptr;
+		bool device_is_grabbed = false;
+		BitField local_key_state{KEY_CNT};
+		std::thread input_monitor_thread;
 
-	protected:
-	// PROTECTED MEMBERS
-		struct libevdev* dev;
-		bool is_active;
-		std::thread input_monitor_process;
+		void input_monitor_process();
 
-		virtual void input_monitor() = 0;
-
+	// PRIVATE CONSTRUCTOR
+		Device(const std::string& filepath);
+	
 	public:
-	// CONSTRUCTOR(S)
-		Device();
-
 	// DESTRUCTOR
-		virtual ~Device() = 0;
-
+		~Device();
+	
 	// PUBLIC INTERFACE
-		static Device* create_device(const std::string& event_path);
-		static void set_event_processor(void (**func_ptr)(const struct input_event&));
-		static void init_watchdog();
-		static void set_timeout_length(unsigned secs);
-		static void set_activation_cmd();
-		static void trigger_activation();	// Global Trigger
-		static void wait_to_exit();
-		static void exit();
-		
-		BitField return_enabled_event_codes(unsigned type);
-		void toggle_device();
+		static void set_event_processor(void (*event_processing_function)(struct input_event&));
+		static void initialize_devices(const std::string& directory);
+		static void set_timeout_length(unsigned seconds);
+		static void trigger_activation();
+		static void trigger_exit();
+
+		Device(const Device&) = delete;	// Delete copy constructor
+		Device& operator= (const Device&) = delete;	// Delete copy operator
 };
 
 #endif // DEVICE_HPP
