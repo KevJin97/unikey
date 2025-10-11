@@ -38,43 +38,7 @@ int return_to_original_group_permissions(int gid)
 	return 0;
 }
 
-std::vector<BitField> initialize_all_devices(std::vector<Device*>& devices)
-{
-	const std::string filepath = "/dev/input/event";
-	unsigned event_num = 0;
-
-	while (std::filesystem::exists((filepath + std::to_string(event_num)).c_str()))
-	{
-		std::cout << "Initializing: " << ("/dev/input/event" + std::to_string(event_num)).c_str() << std::endl;
-
-		devices.push_back(new Device(event_num++));
-	}
-	for (unsigned n = 0; n < 10; ++n)
-	{
-		std::cout << "Checking: " << ("/dev/input/event" + std::to_string(event_num + n)).c_str() << std::endl;
-		if (std::filesystem::exists((filepath + std::to_string(event_num + n)).c_str()))
-		{
-			std::cout << "Initializing: " << ("/dev/input/event" + std::to_string(event_num)).c_str() << std::endl;
-			devices.push_back(new Device(event_num + n));
-		}
-	}
-
-	std::vector<BitField> available_inputs(EV_CNT);
-
-	for (std::size_t n = 0; n < devices.size(); ++n)
-	{
-		for (std::size_t type = 0; type < EV_CNT; ++type)
-		{
-			if (devices[n]->return_enabled_event_codes(type).size() != 0)
-			{
-				available_inputs[type] = available_inputs[type] & devices[n]->return_enabled_event_codes(type);
-			}
-		}
-	}
-
-	return available_inputs;
-}
-
+/*
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -103,3 +67,4 @@ void broadcast_service()
 	}
 	close(broadcast_socket);
 }
+*/
