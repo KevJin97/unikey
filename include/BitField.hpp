@@ -22,9 +22,9 @@ class BitField
 	// PUBLIC INTERFACE
 		static BitField zero();
 
-		void insert(uint64_t index);
+		bool insert(uint64_t index);
 		bool contains(uint64_t index) const;
-		void remove(uint64_t index);
+		bool remove(uint64_t index);
 		void clear();	// Erases all elements
 		void wipe();	// Zeros out all elements
 		std::size_t max_bit_size() const;

@@ -29,26 +29,32 @@ BitField::BitField(const std::vector<uint64_t>& value_list)
 	}
 }
 
-void BitField::insert(uint64_t index)
+bool BitField::insert(uint64_t index)
 {
 	if (this->bits.size() <= index / BITSIZE)
 	{
 		this->bits.resize(index / BITSIZE + 1, 0);
 	}
-	this->bits[index / BITSIZE] |= (1 << (index % BITSIZE));
+
+	uint64_t orig_val = this->bits[index / BITSIZE];
+	this->bits[index / BITSIZE] |= (1ULL << (index % BITSIZE));
+	return orig_val ^ this->bits[index / BITSIZE];
 }
 
 bool BitField::contains(uint64_t index) const
 {
-	return (this->bits.size() <= index / BITSIZE) ? false : (this->bits[index / BITSIZE] & (1 << (index % BITSIZE))) != 0;
+	return (this->bits.size() <= index / BITSIZE) ? false : ((this->bits[index / BITSIZE] & (1ULL << (index % BITSIZE))) != 0);
 }
 
-void BitField::remove(uint64_t index)
+bool BitField::remove(uint64_t index)
 {
 	if (this->bits.size() > index / BITSIZE)
 	{
-		this->bits[index / BITSIZE] &= ~(1 << (index % BITSIZE));
+		uint64_t orig_val = this->bits[index / BITSIZE];
+		this->bits[index / BITSIZE] &= ~(1ULL << (index % BITSIZE));
+		return orig_val ^ this->bits[index / BITSIZE];
 	}
+	return false;
 }
 
 void BitField::clear()
