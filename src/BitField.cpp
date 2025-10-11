@@ -2,17 +2,23 @@
 #include <vector>
 
 #include "BitField.hpp"
-#define BITSIZE 64
 
-BitField::BitField() {}
-BitField::BitField(std::size_t size)
+BitField BitField::zero()
 {
-	this->bits.resize(size / BITSIZE, 0);
+	static BitField bitfield;
+	return bitfield;
 }
 
-BitField::BitField(const BitField& bit)
+BitField::BitField() {}
+
+BitField::BitField(std::size_t size)
 {
-	this->bits = bit.bits;
+	this->bits.resize((size / BITSIZE) + 1, 0);
+}
+
+BitField::BitField(const BitField& bitfield)
+{
+	this->bits = bitfield.bits;
 }
 
 BitField::BitField(const std::vector<uint64_t>& value_list)
@@ -23,33 +29,32 @@ BitField::BitField(const std::vector<uint64_t>& value_list)
 	}
 }
 
-void BitField::insert(uint64_t index)
+bool BitField::insert(uint64_t index)
+{
+	if (this->bits.size() <= index / BITSIZE)
+	{
+		this->bits.resize(index / BITSIZE + 1, 0);
+	}
+
+	uint64_t orig_val = this->bits[index / BITSIZE];
+	this->bits[index / BITSIZE] |= (1ULL << (index % BITSIZE));
+	return orig_val ^ this->bits[index / BITSIZE];
+}
+
+bool BitField::contains(uint64_t index) const
+{
+	return (this->bits.size() <= index / BITSIZE) ? false : ((this->bits[index / BITSIZE] & (1ULL << (index % BITSIZE))) != 0);
+}
+
+bool BitField::remove(uint64_t index)
 {
 	if (this->bits.size() > index / BITSIZE)
 	{
-		this->bits[index / BITSIZE] |= (1 << (index % BITSIZE));
+		uint64_t orig_val = this->bits[index / BITSIZE];
+		this->bits[index / BITSIZE] &= ~(1ULL << (index % BITSIZE));
+		return orig_val ^ this->bits[index / BITSIZE];
 	}
-	else
-	{
-		while (this->bits.size() < (index / BITSIZE))
-		{
-			this->bits.push_back(0);
-		}
-		this->bits.push_back(1 << (index % BITSIZE));
-	}
-}
-
-bool BitField::contains(uint64_t index)
-{
-	return (this->bits.size() <= index / BITSIZE) ? false : (this->bits[index / BITSIZE] & (1 << (index % BITSIZE))) != 0;
-}
-
-void BitField::remove(uint64_t index)
-{
-	if (this->bits.size() > index / BITSIZE)
-	{
-		this->bits[index / BITSIZE] &= ~(1 << (index % BITSIZE));
-	}
+	return false;
 }
 
 void BitField::clear()
@@ -57,33 +62,51 @@ void BitField::clear()
 	this->bits.clear();
 }
 
-std::size_t BitField::size() const
+void BitField::wipe()
 {
-	return this->bits.size() * 8;
+	for (std::size_t n = 0; n < this->bits.size(); ++n)
+	{
+		this->bits[n] = 0;
+	}
 }
 
-BitField& BitField::operator= (const BitField& bitfield)
+std::size_t BitField::max_bit_size() const
+{
+	return this->bits.size() * BITSIZE;
+}
+
+std::size_t BitField::max_byte_size() const
+{
+	return this->bits.size() * BITSIZE / 8;
+}
+
+std::size_t BitField::vector_size() const
+{
+	return this->bits.size();
+}
+
+BitField& BitField::operator=(const BitField& bitfield)
 {
 	this->bits = bitfield.bits;
 	return *this;
 }
 
-bool BitField::operator==(const BitField& bitfield)
+bool BitField::operator==(const BitField& bitfield) const
 {
 	std::size_t n = 0;
-	const std::vector<uint64_t>* compare[2] = { &this->bits, &bitfield.bits };
-	bool larger = (this->bits.size() >= bitfield.bits.size()) ? true : false;
+	const BitField* compare[2] = { this, &bitfield };
+	bool larger = (this->bits.size() < bitfield.bits.size());
 
-	for (; n < compare[!larger]->size(); ++n)
+	for (; n < compare[!larger]->bits.size(); ++n)
 	{
-		if ((*compare[larger])[n] != (*compare[!larger])[n])
+		if (compare[larger]->bits[n] != compare[!larger]->bits[n])
 		{
 			return false;
 		}
 	}
-	for (; n < compare[larger]->size(); ++n)
+	for (; n < compare[larger]->bits.size(); ++n)
 	{
-		if ((*compare[larger])[n] != 0)
+		if (compare[larger]->bits[n] != 0)
 		{
 			return false;
 		}
@@ -91,141 +114,114 @@ bool BitField::operator==(const BitField& bitfield)
 	return true;
 }
 
-bool BitField::operator!=(const BitField& bitfield)
+bool BitField::operator!=(const BitField& bitfield) const
 {
 	return !(*this == bitfield);
 }
 
-BitField BitField::operator&(const BitField& bit)
+BitField BitField::operator&(const BitField& bitfield) const
 {
-	const BitField* fields[2];
-	bool same_size;
-	if (this->bits.size() == bit.bits.size())
-	{
-		fields[0] = this;
-		fields[1] = &bit;
-		same_size = true;
-	}
-	else
-	{
-		fields[0] = (this->bits.size() > bit.bits.size()) ? this : &bit;
-		fields[1] = (this->bits.size() > bit.bits.size()) ? &bit : this;
-		same_size = false;
-	}
+	const BitField* fields[2] = { this, &bitfield };
+	bool larger = (this->bits.size() < bitfield.bits.size());
+	BitField new_field;
+	new_field.bits.resize(fields[!larger]->bits.size());
 
-	BitField new_field(fields[0]->bits.size());
-	if (same_size)
+	for (std::size_t n = 0; n < fields[!larger]->bits.size(); ++n)
 	{
-		for (std::size_t n = 0; n < this->bits.size(); ++n)
-		{
-			new_field.bits[n] = this->bits[n] & bit.bits[n];
-		}
+		new_field.bits[n] = (fields[larger]->bits[n] & fields[!larger]->bits[n]);
 	}
-	else
-	{
-		std::size_t n = 0;
-		for (; n < fields[1]->bits.size(); ++n)
-		{
-			new_field.bits[n] = fields[0]->bits[n] & fields[1]->bits[n];
-		}
-	}
+	
 	return new_field;
 }
 
-BitField BitField::operator|(const BitField& bit)
+BitField BitField::operator|(const BitField& bitfield) const
 {
-	const BitField* fields[2];
-	bool same_size;
-	if (this->bits.size() == bit.bits.size())
+	const BitField* fields[2] = { this, &bitfield };
+	bool larger = (this->bits.size() < bitfield.bits.size());
+	BitField new_field = *fields[larger];
+
+	for (std::size_t n = 0; n < fields[!larger]->bits.size(); ++n)
 	{
-		fields[0] = this;
-		fields[1] = &bit;
-		same_size = true;
-	}
-	else
-	{
-		fields[0] = (this->bits.size() > bit.bits.size()) ? this : &bit;
-		fields[1] = (this->bits.size() > bit.bits.size()) ? &bit : this;
-		same_size = false;
+		new_field.bits[n] |= fields[!larger]->bits[n];
 	}
 
-	BitField new_field(fields[0]->bits.size());
-	if (same_size)
-	{
-		for (std::size_t n = 0; n < this->bits.size(); ++n)
-		{
-			new_field.bits[n] = this->bits[n] | bit.bits[n];
-		}
-	}
-	else
-	{
-		std::size_t n = 0;
-		for (; n < fields[1]->bits.size(); ++n)
-		{
-			new_field.bits[n] = fields[0]->bits[n] | fields[1]->bits[n];
-		}
-		for (; n < fields[0]->bits.size(); ++n)
-		{
-			new_field.bits[n] = (fields[0]->bits[n]) ? fields[0]->bits[n] : 0;
-		}
-	}
 	return new_field;
 }
 
-BitField BitField::operator^(const BitField& bit)
+BitField BitField::operator^(const BitField& bitfield) const
 {
-	const BitField* fields[2];
-	bool same_size;
-	if (this->bits.size() == bit.bits.size())
+	const BitField* fields[2] = { this, &bitfield };
+	bool larger = (this->bits.size() < bitfield.bits.size());
+	BitField new_field = *fields[larger];
+
+	for (std::size_t n = 0; n < fields[!larger]->bits.size(); ++n)
 	{
-		fields[0] = this;
-		fields[1] = &bit;
-		same_size = true;
-	}
-	else
-	{
-		fields[0] = (this->bits.size() > bit.bits.size()) ? this : &bit;
-		fields[1] = (this->bits.size() > bit.bits.size()) ? &bit : this;
-		same_size = false;
+		new_field.bits[n] ^= fields[!larger]->bits[n];
 	}
 
-	BitField new_field(fields[0]->bits.size());
-	if (same_size)
-	{
-		for (std::size_t n = 0; n < this->bits.size(); ++n)
-		{
-			new_field.bits[n] = this->bits[n] ^ bit.bits[n];
-		}
-	}
-	else
-	{
-		std::size_t n = 0;
-		for (; n < fields[1]->bits.size(); ++n)
-		{
-			new_field.bits[n] = fields[0]->bits[n] ^ fields[1]->bits[n];
-		}
-		for (; n < fields[0]->bits.size(); ++n)
-		{
-			new_field.bits[n] = 0 ^ fields[0]->bits[n];
-		}
-	}
 	return new_field;
 }
 
-BitField& BitField::operator&=(const BitField& bit)
+BitField& BitField::operator&=(const BitField& bitfield)
 {
-	return *this = *this & bit;
+	if (this->bits.size() > bitfield.bits.size())
+	{
+		this->bits.resize(bitfield.bits.size());
+	}
+
+	for (std::size_t n = 0; n < this->bits.size(); ++n)
+	{
+		this->bits[n] &= bitfield.bits[n];
+	}
+	
+	return *this;
 }
 
-BitField& BitField::operator|=(const BitField& bit)
+BitField& BitField::operator|=(const BitField& bitfield)
 {
-	return *this = *this | bit;
+	const std::size_t initial_size = this->bits.size();
+
+	if (this->bits.size() < bitfield.bits.size())
+	{
+		this->bits.resize(bitfield.bits.size(), 0);
+	}
+
+	for (std::size_t n = 0; n < this->bits.size(); ++n)
+	{
+		if (n < initial_size)
+		{
+			this->bits[n] |= bitfield.bits[n];
+		}
+		else
+		{
+			this->bits[n] = bitfield.bits[n];
+		}
+	}
+
+	return *this;
 }
 
-BitField& BitField::operator^=(const BitField& bit)
+BitField& BitField::operator^=(const BitField& bitfield)
 {
-	return *this = *this ^ bit;
+	if (this == &bitfield)
+	{
+		this->clear();
+		return *this;
+	}
+	
+	std::size_t overlap = (this->bits.size() <= bitfield.bits.size()) ? this->bits.size() : bitfield.bits.size();
+	for (std::size_t n = 0; n < overlap; ++n)
+	{
+		this->bits[n] ^= bitfield.bits[n];
+	}
+
+	if (this->bits.size() < bitfield.bits.size())
+	{
+		this->bits.resize(bitfield.bits.size());
+		for (std::size_t n = overlap; n < this->bits.size(); ++n)
+		{
+			this->bits[n] = bitfield.bits[n];
+		}
+	}
+	return *this;
 }
-
-
-#undef BITSIZE

@@ -13,6 +13,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # Add Libraries
 #add_library(PROJECT_HEADER STATIC )
 
+#find_package(sdbus-c++ REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_search_module(LIBEVDEV REQUIRED libevdev)
 
@@ -26,4 +27,8 @@ target_include_directories(unikey
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(unikey PRIVATE ${LIBEVDEV_LIBRARIES})
+target_link_libraries(unikey 
+	PRIVATE
+		${LIBEVDEV_LIBRARIES}
+#		SDBusCpp::sdbus-c++
+)

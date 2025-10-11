@@ -5,22 +5,27 @@
 		{
 			"label": "build-debug-make",
 			"type": "shell",
-			"command": "cmake -S . -B build/make -DCMAKE_BUILD_TYPE=Debug && cmake --build build/make"
+			"command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build"
 		},
 		{
 			"label": "release-compile-make",
 			"type": "shell",
-			"command": "cmake -S . -B bin/make -DCMAKE_BUILD_TYPE=Release && cmake --build bin/make"
+			"command": "cmake -S . -B bin -DCMAKE_BUILD_TYPE=Release && cmake --build bin"
 		},
 		{
 			"label": "build-debug-ninja",
 			"type": "shell",
-			"command": "cmake -S . -B build/ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build/ninja"
+			"command": "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		},
 		{
 			"label": "release-compile-ninja",
 			"type": "shell",
-			"command": "cmake -S . -B bin/ninja -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build bin/ninja"
+			"command": "cmake -S . -B bin -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build bin"
 		}
 	]
 }
