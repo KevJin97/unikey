@@ -128,7 +128,8 @@ void Device::watchdog_process()
 			{
 				Device::event_process(p_events[n]);
 			}
-			std::cout << '\n' << std::endl;
+			std::cout << std::endl;
+
 			Device::pending_events.fetch_sub(1);
 			free(p_data);
 		}
@@ -243,7 +244,7 @@ void Device::input_monitor_process()
 					switch(event_queue[*p_event_count].type)	// Handle events
 					{
 						case EV_SYN:
-							if (event_queue[*p_event_count].value == SYN_REPORT && this->device_is_grabbed)
+							if (*p_event_count && event_queue[*p_event_count].value == SYN_REPORT && this->device_is_grabbed)
 							{
 								Device::global_queue.push(p_data);
 								write(Device::poll_signal_fd, &add_to_count, sizeof(uint64_t));	// Write to polling eventfd
@@ -261,32 +262,30 @@ void Device::input_monitor_process()
 							if (event_queue[*p_event_count].value == 0 && this->local_key_state.remove(event_queue[*p_event_count].code))
 							{
 								// Only register a key release when there are no keys being pressed down
-								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_sub(1, std::memory_order_acq_rel) == 1)
+								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_sub(1, std::memory_order_relaxed) == 1)
 								{
 									++*p_event_count;
 								}
 							}
-							else if (event_queue[*p_event_count].value >= 1)	// If key is pressed ONLY
+							else if (event_queue[*p_event_count].value == 1)	// If key is pressed ONLY
 							{
 								if (this->local_key_state.insert(event_queue[*p_event_count].code))
 								{
-									Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_acq_rel);
+									Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_relaxed);
 								}
 								++*p_event_count;
 							}
 							break;
 
 						case EV_REL:
+						case EV_ABS:
+						default:
 							if (event_queue[*p_event_count].value != 0)
 							{
 								++*p_event_count;
 							}
 							break;
 
-						case EV_ABS:
-							break;
-
-						default:
 							break;
 					}
 					break;
@@ -296,9 +295,9 @@ void Device::input_monitor_process()
 					{
 						for (std::size_t n = 0; n < *p_event_count; ++n)
 						{
-							if (event_queue[n].code == EV_KEY & event_queue[n].value != 0)
+							if (event_queue[n].code == EV_KEY && event_queue[n].value != 0)
 							{
-								Device::global_key_state[event_queue[n].code].fetch_sub(1, std::memory_order_acq_rel);
+								Device::global_key_state[event_queue[n].code].fetch_sub(1, std::memory_order_relaxed);
 								this->local_key_state.remove(event_queue[n].code);
 							}
 						}
