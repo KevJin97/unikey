@@ -8,7 +8,8 @@
 
 int main(int argc, char* argv[])
 {
-	Device::set_event_processor(&print_event);
+	// Device::set_event_processor(&print_event);
+	Device::set_timeout_length(10);
 	Device::initialize_devices("/dev/input");
 
 	for (;;)

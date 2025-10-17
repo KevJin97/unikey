@@ -26,7 +26,29 @@
 
 inline void print_event(struct input_event& ev)
 {
-	std::cout << libevdev_event_code_get_name(ev.type, ev.code) << ',' << ev.value << '\t';
+	static int coordinates[2] = { 0, 0 };
+	if (ev.type == EV_REL)
+	{
+		switch(ev.code)
+		{
+			case REL_X:
+				coordinates[0] = ev.value;
+				break;
+
+			case REL_Y:
+				coordinates[1] = ev.value;
+				break;
+			
+			default:
+				break;
+		}
+	}
+	else
+	{
+		std::cout << libevdev_event_code_get_name(ev.type, ev.code) << ',' << ev.value << std::endl;
+	}
+
+	std::cout << "(" << coordinates[0] << "," << coordinates[1] << ")     " << '\r';
 }
 
 class Device
@@ -37,8 +59,8 @@ class Device
 	static inline std::vector<Device*> device_objects;
 	static inline std::thread watchdog_thread;
 	static inline unsigned timeout_length = 30000;
-	static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-	static inline int exit_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
+	static inline int event_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 	static inline std::atomic_uint32_t active_devices{0};
 	static inline std::atomic_uint32_t pending_events{0};
 	static inline std::atomic_bool is_grabbed{false};
@@ -51,6 +73,7 @@ class Device
 		bool device_is_grabbed = false;
 		BitField local_key_state{KEY_CNT};
 		std::thread input_monitor_thread;
+		unsigned total_pressed = 0;
 
 		void input_monitor_process();
 

@@ -4,6 +4,7 @@
 #include "libevdev/libevdev.h"
 
 #include <atomic>
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -18,7 +19,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/poll.h>
-#include <thread>
 
 void Device::set_event_processor(void (*event_processing_function)(struct input_event&))
 {
@@ -82,6 +82,9 @@ void Device::trigger_activation()
 	while (!Device::is_grabbed.compare_exchange_strong(state, !state, std::memory_order_acq_rel));
 	Device::is_grabbed.notify_all();
 	state = !state;
+
+	constexpr uint64_t message = 1;
+	write(Device::event_signal_fd, &message, sizeof(uint64_t));
 }
 
 void Device::trigger_exit()
@@ -93,7 +96,7 @@ void Device::trigger_exit()
 	}
 
 	uint64_t buffer = 1;
-	write(Device::exit_signal_fd, &buffer, sizeof(uint64_t));
+	write(Device::event_signal_fd, &buffer, sizeof(uint64_t));
 	Device::watchdog_thread.join();
 	// Notify event handler that devices are exited
 
@@ -110,15 +113,14 @@ void Device::watchdog_process()
 	pfd.fd = Device::poll_signal_fd;
 	pfd.events = POLLIN;
 
-	while (Device::is_exit.load() == false)
+	while (Device::is_exit.load(std::memory_order_acquire) == false)
 	{
 		Device::active_devices.wait(0);
 
-		if (Device::pending_events.load() != 0)
+		if (Device::pending_events.load(std::memory_order_acquire))
 		{
 			uint64_t event_count = 0;
 			read(pfd.fd, &event_count, sizeof(uint64_t));
-
 			void* p_data = Device::global_queue.pop();
 			uint64_t* message_length = (uint64_t*)p_data;
 			struct input_event* p_events = (struct input_event*)(message_length + 1);
@@ -128,11 +130,11 @@ void Device::watchdog_process()
 			{
 				Device::event_process(p_events[n]);
 			}
-			std::cout << '\n' << std::endl;
-			Device::pending_events.fetch_sub(1);
+
+			Device::pending_events.fetch_sub(1, std::memory_order_acq_rel);
 			free(p_data);
 		}
-		else if (Device::is_grabbed.load())
+		else if (Device::is_grabbed.load(std::memory_order_acquire))
 		{
 			if (poll(&pfd, 1, Device::timeout_length) < 0)
 			{
@@ -158,7 +160,7 @@ void Device::watchdog_process()
 		
 	} while ((active_devices_left = Device::active_devices.load()));
 
-	close(Device::exit_signal_fd);
+	close(Device::event_signal_fd);
 	close(Device::poll_signal_fd);
 }
 
@@ -216,11 +218,11 @@ void Device::input_monitor_process()
 	struct pollfd pfd[2];
 	pfd[0].fd = libevdev_get_fd(this->dev);
 	pfd[0].events = POLLIN;
-	pfd[1].fd = Device::exit_signal_fd;
+	pfd[1].fd = Device::event_signal_fd;
 	pfd[1].events = POLLIN;
 	
 	// Main loop
-	while (Device::is_exit.load() == false)
+	while (Device::is_exit.load(std::memory_order_acquire) == false)
 	{
 		if (timeout_counter != UINT8_MAX)
 		{
@@ -237,13 +239,12 @@ void Device::input_monitor_process()
 					{
 						libevdev_next_event(this->dev, read_flag, &event_queue[*p_event_count]);
 					}
-
 				case LIBEVDEV_READ_STATUS_SUCCESS:
 					timeout_counter = 0;
 					switch(event_queue[*p_event_count].type)	// Handle events
 					{
 						case EV_SYN:
-							if (event_queue[*p_event_count].value == SYN_REPORT && this->device_is_grabbed)
+							if (*p_event_count && event_queue[*p_event_count].value == SYN_REPORT && this->device_is_grabbed)
 							{
 								Device::global_queue.push(p_data);
 								write(Device::poll_signal_fd, &add_to_count, sizeof(uint64_t));	// Write to polling eventfd
@@ -265,13 +266,18 @@ void Device::input_monitor_process()
 								{
 									++*p_event_count;
 								}
+								--this->total_pressed;
 							}
-							else if (event_queue[*p_event_count].value >= 1)	// If key is pressed ONLY
+							else if (this->local_key_state.insert(event_queue[*p_event_count].code))	// If key is pressed ONLY
 							{
-								if (this->local_key_state.insert(event_queue[*p_event_count].code))
+								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_acq_rel) == 0)
 								{
-									Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_acq_rel);
+									++*p_event_count;
 								}
+								++this->total_pressed;
+							}
+							else
+							{
 								++*p_event_count;
 							}
 							break;
@@ -284,8 +290,6 @@ void Device::input_monitor_process()
 							break;
 
 						case EV_ABS:
-							break;
-
 						default:
 							break;
 					}
@@ -296,7 +300,7 @@ void Device::input_monitor_process()
 					{
 						for (std::size_t n = 0; n < *p_event_count; ++n)
 						{
-							if (event_queue[n].code == EV_KEY & event_queue[n].value != 0)
+							if (event_queue[n].code == EV_KEY && event_queue[n].value != 0)
 							{
 								Device::global_key_state[event_queue[n].code].fetch_sub(1, std::memory_order_acq_rel);
 								this->local_key_state.remove(event_queue[n].code);
@@ -310,19 +314,28 @@ void Device::input_monitor_process()
 					goto CLEAN_UP_THREAD;	// Break out of loop to deactivate device
 			}
 		}
-		else if (Device::is_grabbed.load() != this->device_is_grabbed)	// Toggling local grab state (only grabs if no inputs are being received)
+		else if (Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed && this->total_pressed == 0)	// Toggling local grab state (only grabs if no inputs are being received)
 		{
-			this->device_is_grabbed ^= !libevdev_has_event_pending(this->dev);	// Only toggle state if there are no events pending
-			libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
+			if (libevdev_has_event_pending(this->dev) == false)
+			{
+				this->device_is_grabbed = !this->device_is_grabbed;
+				libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
+				uint64_t msg = 0;
+				read(pfd[1].fd, &msg, sizeof(uint64_t));
+			}
 		}
 		else if (poll(pfd, 2, -1) < 0)	// Handle polling error
 		{
 			std::cerr << "Input polling failed: " << strerror(errno) << std::endl;
 			break;
 		}
-		else
+		else if (libevdev_has_event_pending(this->dev))
 		{
 			++timeout_counter;	// Overflow counter back to 0
+		}
+		else
+		{
+			continue;
 		}
 	}
 
