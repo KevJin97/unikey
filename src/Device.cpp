@@ -84,7 +84,7 @@ void Device::trigger_activation()
 	state = !state;
 
 	constexpr uint64_t message = 1;
-	write(Device::exit_signal_fd, &message, sizeof(uint64_t));
+	write(Device::event_signal_fd, &message, sizeof(uint64_t));
 }
 
 void Device::trigger_exit()
@@ -96,7 +96,7 @@ void Device::trigger_exit()
 	}
 
 	uint64_t buffer = 1;
-	write(Device::exit_signal_fd, &buffer, sizeof(uint64_t));
+	write(Device::event_signal_fd, &buffer, sizeof(uint64_t));
 	Device::watchdog_thread.join();
 	// Notify event handler that devices are exited
 
@@ -160,7 +160,7 @@ void Device::watchdog_process()
 		
 	} while ((active_devices_left = Device::active_devices.load()));
 
-	close(Device::exit_signal_fd);
+	close(Device::event_signal_fd);
 	close(Device::poll_signal_fd);
 }
 
@@ -218,7 +218,7 @@ void Device::input_monitor_process()
 	struct pollfd pfd[2];
 	pfd[0].fd = libevdev_get_fd(this->dev);
 	pfd[0].events = POLLIN;
-	pfd[1].fd = Device::exit_signal_fd;
+	pfd[1].fd = Device::event_signal_fd;
 	pfd[1].events = POLLIN;
 	
 	// Main loop
