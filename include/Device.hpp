@@ -24,36 +24,18 @@
 
 // TODO: implement shared memory to modify is_grabbed and is_exit values externally
 
-inline void print_event(struct input_event& ev)
+inline void print_event(struct input_event* ev, uint64_t length)
 {
-	static int coordinates[2] = { 0, 0 };
-	if (ev.type == EV_REL)
+	for (uint64_t n = 0; n < length; ++n)
 	{
-		switch(ev.code)
-		{
-			case REL_X:
-				coordinates[0] = ev.value;
-				break;
-
-			case REL_Y:
-				coordinates[1] = ev.value;
-				break;
-			
-			default:
-				break;
-		}
+		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
 	}
-	else
-	{
-		std::cout << libevdev_event_code_get_name(ev.type, ev.code) << ',' << ev.value << std::endl;
-	}
-
-	std::cout << "(" << coordinates[0] << "," << coordinates[1] << ")     " << '\r';
+	std::cout << std::endl;
 }
 
 class Device
 {
-	static inline void (*event_process)(struct input_event&) = print_event;
+	static inline void (*event_process)(struct input_event*, uint64_t) = print_event;
 	static inline Cyclic_Queue global_queue;
 	static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
 	static inline std::vector<Device*> device_objects;
@@ -85,7 +67,7 @@ class Device
 		~Device();
 	
 	// PUBLIC INTERFACE
-		static void set_event_processor(void (*event_processing_function)(struct input_event&));
+		static void set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t));
 		static void initialize_devices(const std::string& directory);
 		static void set_timeout_length(unsigned seconds);
 		static void trigger_activation();

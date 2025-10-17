@@ -1,5 +1,4 @@
 #include "Device.hpp"
-#include "libevdev/libevdev.h"
 #include <unikey.hpp>
 
 #include <iostream>
