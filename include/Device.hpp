@@ -23,37 +23,11 @@
 #include "Cyclic_Queue.hpp"
 
 // TODO: implement shared memory to modify is_grabbed and is_exit values externally
-
-inline void print_event(struct input_event& ev)
-{
-	static int coordinates[2] = { 0, 0 };
-	if (ev.type == EV_REL)
-	{
-		switch(ev.code)
-		{
-			case REL_X:
-				coordinates[0] = ev.value;
-				break;
-
-			case REL_Y:
-				coordinates[1] = ev.value;
-				break;
-			
-			default:
-				break;
-		}
-	}
-	else
-	{
-		std::cout << libevdev_event_code_get_name(ev.type, ev.code) << ',' << ev.value << std::endl;
-	}
-
-	std::cout << "(" << coordinates[0] << "," << coordinates[1] << ")     " << '\r';
-}
+void print_event(struct input_event* ev, uint64_t length);
 
 class Device
 {
-	static inline void (*event_process)(struct input_event&) = print_event;
+	static inline void (*event_process)(struct input_event*, uint64_t) = print_event;
 	static inline Cyclic_Queue global_queue;
 	static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
 	static inline std::vector<Device*> device_objects;
@@ -63,6 +37,7 @@ class Device
 	static inline int event_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 	static inline std::atomic_uint32_t active_devices{0};
 	static inline std::atomic_uint32_t pending_events{0};
+	static inline std::atomic_uint32_t global_key_press_cnt{0};
 	static inline std::atomic_bool is_grabbed{false};
 	static inline std::atomic_bool is_exit{false};
 
@@ -73,7 +48,7 @@ class Device
 		bool device_is_grabbed = false;
 		BitField local_key_state{KEY_CNT};
 		std::thread input_monitor_thread;
-		unsigned total_pressed = 0;
+		unsigned key_press_cnt = 0;
 
 		void input_monitor_process();
 
@@ -85,14 +60,45 @@ class Device
 		~Device();
 	
 	// PUBLIC INTERFACE
-		static void set_event_processor(void (*event_processing_function)(struct input_event&));
+		static void set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t));
 		static void initialize_devices(const std::string& directory);
 		static void set_timeout_length(unsigned seconds);
 		static void trigger_activation();
 		static void trigger_exit();
+		static bool return_grab_state();
 
 		Device(const Device&) = delete;	// Delete copy constructor
 		Device& operator= (const Device&) = delete;	// Delete copy operator
 };
+
+
+inline void print_event(struct input_event* ev, uint64_t length)
+{
+	static bool KEY_POWER_detected = false;
+	for (uint64_t n = 0; n < length; ++n)
+	{
+		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
+		if (ev[n].type == EV_KEY && ev[n].code == KEY_POWER)
+		{
+			if (ev[n].value == 1)
+			{
+				KEY_POWER_detected = true;
+			}
+			else if (ev[n].value == 0 && KEY_POWER_detected == true)
+			{
+				Device::trigger_activation();
+				if (n % 4 != 3)	std::cout << std::endl;
+				break;
+			}
+			else
+			{
+				continue;
+			}
+		}
+	}
+	(KEY_POWER_detected == true && Device::return_grab_state() == false) 
+		? std::cout << "System has been ungrabbed" << std::endl
+		: std::cout << std::endl;
+}
 
 #endif // DEVICE_HPP
