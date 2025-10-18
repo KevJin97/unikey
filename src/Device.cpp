@@ -277,7 +277,7 @@ void Device::input_monitor_process()
 								}
 								--this->key_press_cnt;
 							}
-							else if (this->local_key_state.insert(event_queue[*p_event_count].code))	// If key is pressed ONLY
+							else if (event_queue[*p_event_count].value == 1 && this->local_key_state.insert(event_queue[*p_event_count].code))	// If key is pressed ONLY
 							{
 								Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
 								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_acq_rel) == 0)
@@ -285,10 +285,6 @@ void Device::input_monitor_process()
 									++*p_event_count;
 								}
 								++this->key_press_cnt;
-							}
-							else
-							{
-								++*p_event_count;
 							}
 							break;
 
