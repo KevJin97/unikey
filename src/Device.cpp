@@ -83,7 +83,7 @@ void Device::trigger_activation()
 	Device::is_grabbed.notify_all();
 	state = !state;
 
-	constexpr uint64_t message = 1;
+	uint64_t message = 1;
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
 }
 
@@ -202,7 +202,7 @@ void Device::input_monitor_process()
 	static constexpr enum libevdev_grab_mode grab_state[2] = { LIBEVDEV_UNGRAB, LIBEVDEV_GRAB };
 
 	uint8_t timeout_counter = 0;	// Counter to prevent constant checks and enter polling mode if no input detected
-	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_NORMAL;
+	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_FORCE_SYNC;
 	/* 
 		Allocate generic memory block
 		Memory structure:
@@ -219,7 +219,7 @@ void Device::input_monitor_process()
 	pfd[0].events = POLLIN;
 	pfd[1].fd = Device::event_signal_fd;
 	pfd[1].events = POLLIN;
-	
+
 	// Main loop
 	while (Device::is_exit.load(std::memory_order_acquire) == false)
 	{
@@ -290,7 +290,7 @@ void Device::input_monitor_process()
 
 						case EV_ABS:
 							++*p_event_count;
-							
+
 						default:
 							break;
 					}
@@ -325,7 +325,7 @@ void Device::input_monitor_process()
 				read(pfd[1].fd, &msg, sizeof(uint64_t));
 			}
 		}
-		else if (poll(pfd, 2, -1) < 0)	// Handle polling error
+		else if (poll(pfd, 2, 500) < 0)	// Handle polling error
 		{
 			std::cerr << "Input polling failed: " << strerror(errno) << std::endl;
 			break;
