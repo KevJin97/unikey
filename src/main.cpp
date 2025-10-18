@@ -3,12 +3,17 @@
 
 #include <iostream>
 #include <string>
+#include <stdlib.h>
 // #include <thread>
 
 int main(int argc, char* argv[])
 {
+	std::cout << std::endl;
 	// Device::set_event_processor(&print_event);
-	Device::set_timeout_length(5);
+	if (argc == 2)
+	{
+		std::cout << "Timeout Time set to: " << Device::set_timeout_length(atoi(argv[1])) << 's' << std::endl;
+	}
 	std::cout << "Initializing all available input sources..." << std::endl;
 	Device::initialize_devices("/dev/input");
 	std::cout << "Devices have been initialized" << std::endl;
@@ -30,7 +35,7 @@ int main(int argc, char* argv[])
 		{
 			std::cout << "Grabbing device inputs..." << std::endl;
 			Device::trigger_activation();
-			std::cout << "Devices have been grabbed" << std::endl;
+			std::cout << "---GRABBED---\n" << std::endl;
 		}
 		else
 		{

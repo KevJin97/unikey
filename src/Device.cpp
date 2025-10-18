@@ -53,26 +53,24 @@ void Device::initialize_devices(const std::string &directory)
 	}
 }
 
-void Device::set_timeout_length(unsigned int seconds)
+unsigned Device::set_timeout_length(unsigned int seconds)
 {
 	constexpr unsigned MINMAX_TIME[2] = { 1, 900 };
-	
-	Device::is_grabbed.wait(true);
 
+	Device::is_grabbed.wait(true);
 	if (seconds < MINMAX_TIME[0])
 	{
 		// Warning: minimum time is 1 second
-		Device::timeout_length = MINMAX_TIME[0] * 1000;
+		seconds = MINMAX_TIME[0];
 	}
 	else if (seconds > MINMAX_TIME[1])
 	{
 		// Warning: maximum time is 15 minutes
-		Device::timeout_length = MINMAX_TIME[1] * 1000;
+		seconds = MINMAX_TIME[1];
 	}
-	else
-	{
-		Device::timeout_length = seconds * 1000;
-	}
+
+	Device::timeout_length = seconds * 1000;
+	return seconds;
 }
 
 void Device::trigger_activation()

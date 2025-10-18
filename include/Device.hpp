@@ -62,7 +62,7 @@ class Device
 	// PUBLIC INTERFACE
 		static void set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t));
 		static void initialize_devices(const std::string& directory);
-		static void set_timeout_length(unsigned seconds);
+		static unsigned set_timeout_length(unsigned seconds);
 		static void trigger_activation();
 		static void trigger_exit();
 		static bool return_grab_state();
@@ -96,9 +96,15 @@ inline void print_event(struct input_event* ev, uint64_t length)
 			}
 		}
 	}
-	(KEY_POWER_detected == true && Device::return_grab_state() == false) 
-		? std::cout << "System has been ungrabbed" << std::endl
-		: std::cout << std::endl;
+	if (KEY_POWER_detected == true && Device::return_grab_state() == false) 
+	{
+		std::cout << "\n--UNGRABBED--\nEnter Input: " << std::endl;
+		KEY_POWER_detected = false;
+	}
+	else
+	{
+		std::cout << std::endl;
+	}
 }
 
 #endif // DEVICE_HPP
