@@ -209,7 +209,8 @@ void Device::input_monitor_process()
 	static constexpr uint64_t add_to_count = 1;
 	static constexpr enum libevdev_grab_mode grab_state[2] = { LIBEVDEV_UNGRAB, LIBEVDEV_GRAB };
 
-	uint8_t timeout_counter = 0;	// Counter to prevent constant checks and enter polling mode if no input detected
+	//uint8_t read_event = 0;	// Counter to prevent constant checks and enter polling mode if no input detected
+	bool process_event_mode = true;
 	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_FORCE_SYNC;
 	/* 
 		Allocate generic memory block
@@ -231,12 +232,12 @@ void Device::input_monitor_process()
 	// Main loop
 	while (Device::is_exit.load(std::memory_order_acquire) == false)
 	{
-		if (timeout_counter != UINT8_MAX)
+		if (process_event_mode == true)
 		{
 			switch(libevdev_next_event(this->dev, read_flag, &event_queue[*p_event_count]))
 			{
 				case -EAGAIN:	// No inputs are available
-					++timeout_counter;
+					process_event_mode = false;
 					read_flag = LIBEVDEV_READ_FLAG_NORMAL;
 					break;
 
@@ -247,7 +248,7 @@ void Device::input_monitor_process()
 						libevdev_next_event(this->dev, read_flag, &event_queue[*p_event_count]);
 					}
 				case LIBEVDEV_READ_STATUS_SUCCESS:
-					timeout_counter = 0;
+					// read_event = 0;
 					switch(event_queue[*p_event_count].type)	// Handle events
 					{
 						case EV_SYN:
@@ -340,7 +341,7 @@ void Device::input_monitor_process()
 		}
 		else if (libevdev_has_event_pending(this->dev))
 		{
-			++timeout_counter;	// Overflow counter back to 0
+			process_event_mode = true;	// Overflow counter back to 0
 		}
 		else
 		{
