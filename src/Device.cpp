@@ -208,6 +208,7 @@ void Device::input_monitor_process()
 	static constexpr enum libevdev_grab_mode grab_state[2] = { LIBEVDEV_UNGRAB, LIBEVDEV_GRAB };
 
 	//uint8_t read_event = 0;	// Counter to prevent constant checks and enter polling mode if no input detected
+	unsigned key_press_cnt = 0;
 	bool process_event_mode = true;
 	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_FORCE_SYNC;
 	/* 
@@ -246,7 +247,6 @@ void Device::input_monitor_process()
 						libevdev_next_event(this->dev, read_flag, &event_queue[*p_event_count]);
 					}
 				case LIBEVDEV_READ_STATUS_SUCCESS:
-					// read_event = 0;
 					switch(event_queue[*p_event_count].type)	// Handle events
 					{
 						case EV_SYN:
@@ -274,7 +274,7 @@ void Device::input_monitor_process()
 								{
 									++*p_event_count;
 								}
-								--this->key_press_cnt;
+								--key_press_cnt;
 							}
 							else if (event_queue[*p_event_count].value == 1 && this->local_key_state.insert(event_queue[*p_event_count].code))	// If key is pressed ONLY
 							{
@@ -283,7 +283,7 @@ void Device::input_monitor_process()
 								{
 									++*p_event_count;
 								}
-								++this->key_press_cnt;
+								++key_press_cnt;
 							}
 							break;
 
@@ -304,25 +304,24 @@ void Device::input_monitor_process()
 
 				default: 
 					if (*p_event_count != 0)
-					{
 						for (std::size_t n = 0; n < *p_event_count; ++n)
-						{
 							if (event_queue[n].code == EV_KEY && event_queue[n].value != 0)
 							{
 								Device::global_key_state[event_queue[n].code].fetch_sub(1, std::memory_order_acq_rel);
 								Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
 								this->local_key_state.remove(event_queue[n].code);
 							}
-						}
-					}
 					if (this->local_key_state != BitField::zero())
-					{
-						// TODO: send release commands for all keys still registered as pressed
-					}
+						for (unsigned code = 0; code < KEY_CNT; ++code)
+							if (this->local_key_state.remove(code))
+							{
+								Device::global_key_state[code].fetch_sub(1, std::memory_order_acq_rel);
+								Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
+							}
 					goto CLEAN_UP_THREAD;	// Break out of loop to deactivate device
 			}
 		}
-		else if (Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed && this->key_press_cnt == 0)	// Toggling local grab state (only grabs if no inputs are being received)
+		else if ((Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed) && key_press_cnt == 0)	// Toggling local grab state (only grabs if no inputs are being received)
 		{
 			if (libevdev_has_event_pending(this->dev) == false)
 			{
@@ -339,7 +338,7 @@ void Device::input_monitor_process()
 		}
 		else if (libevdev_has_event_pending(this->dev))
 		{
-			process_event_mode = true;	// Overflow counter back to 0
+			process_event_mode = true;
 		}
 		else
 		{

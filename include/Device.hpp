@@ -48,7 +48,6 @@ class Device
 		bool device_is_grabbed = false;
 		BitField local_key_state{KEY_CNT};
 		std::thread input_monitor_thread;
-		unsigned key_press_cnt = 0;
 
 		void input_monitor_process();
 
