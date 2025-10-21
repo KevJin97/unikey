@@ -356,3 +356,55 @@ void Device::input_monitor_process()
 	Device::active_devices.fetch_sub(1, std::memory_order_acq_rel);
 	Device::active_devices.notify_one();
 }
+
+BitField Device::return_enabled_local_key_states()
+{
+	BitField enabled_codes(KEY_CNT);
+	for (unsigned code = 0; code < KEY_CNT; ++code)
+	{
+		if (libevdev_has_event_code(this->dev, EV_KEY, code))
+		{
+			enabled_codes.insert(code);
+		}
+	}
+	return enabled_codes;
+}
+
+BitField Device::return_enabled_local_rel_states()
+{
+	BitField enabled_codes(REL_CNT);
+	for (unsigned code = 0; code < REL_CNT; ++code)
+	{
+		if (libevdev_has_event_code(this->dev, EV_REL, code))
+		{
+			enabled_codes.insert(code);
+		}
+	}
+	return enabled_codes;
+}
+
+BitField Device::return_enabled_global_key_states()
+{
+	BitField enabled_codes(KEY_CNT);
+	for (unsigned n = 0; n < Device::device_objects.size(); ++n)
+	{
+		if (Device::device_objects[n]->dev != nullptr)
+		{
+			enabled_codes |= Device::device_objects[n]->return_enabled_local_key_states();
+		}
+	}
+	return enabled_codes;
+}
+
+BitField Device::return_enabled_global_rel_states()
+{
+	BitField enabled_codes(REL_CNT);
+	for (unsigned n = 0; n < Device::device_objects.size(); ++n)
+	{
+		if (Device::device_objects[n]->dev != nullptr)
+		{
+			enabled_codes |= Device::device_objects[n]->return_enabled_local_rel_states();
+		}
+	}
+	return enabled_codes;
+}

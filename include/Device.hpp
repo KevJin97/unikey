@@ -1,6 +1,7 @@
 #ifndef DEVICE_HPP
 #define DEVICE_HPP
 
+#include <unistd.h>
 #include <vector>
 #include <atomic>
 #include <thread>
@@ -65,9 +66,13 @@ class Device
 		static void trigger_activation();
 		static void trigger_exit();
 		static bool return_grab_state();
+		static BitField return_enabled_global_key_states();
+		static BitField return_enabled_global_rel_states();
 
 		Device(const Device&) = delete;	// Delete copy constructor
 		Device& operator= (const Device&) = delete;	// Delete copy operator
+		BitField return_enabled_local_key_states();
+		BitField return_enabled_local_rel_states();
 };
 
 
@@ -97,7 +102,7 @@ inline void print_event(struct input_event* ev, uint64_t length)
 	}
 	if (KEY_POWER_detected == true && Device::return_grab_state() == false) 
 	{
-		std::cout << "\n--UNGRABBED--\nEnter Input: " << std::endl;
+		std::cout << "\n--UNGRABBED--" << std::endl;
 		KEY_POWER_detected = false;
 	}
 	else
