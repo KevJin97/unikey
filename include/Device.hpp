@@ -35,7 +35,7 @@ class Device
 	static inline std::thread watchdog_thread;
 	static inline unsigned timeout_length = 30000;
 	static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
-	static inline int event_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	static inline int event_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
 	static inline std::atomic_uint32_t active_devices{0};
 	static inline std::atomic_uint32_t pending_events{0};
 	static inline std::atomic_uint32_t global_key_press_cnt{0};

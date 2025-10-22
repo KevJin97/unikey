@@ -77,11 +77,10 @@ void Device::trigger_activation()
 {
 	static bool state = Device::is_grabbed.load();
 
-	while (!Device::is_grabbed.compare_exchange_strong(state, !state, std::memory_order_acq_rel));
+	while (Device::is_grabbed.compare_exchange_strong(state, !state, std::memory_order_acq_rel, std::memory_order_relaxed));
 	Device::is_grabbed.notify_all();
-	state = !state;
 
-	uint64_t message = 1;
+	uint64_t message = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
 }
 
@@ -93,7 +92,7 @@ void Device::trigger_exit()
 		Device::trigger_activation();
 	}
 
-	uint64_t buffer = 1;
+	uint64_t buffer = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &buffer, sizeof(uint64_t));
 	Device::watchdog_thread.join();
 	// Notify event handler that devices are exited
@@ -122,7 +121,6 @@ void Device::watchdog_process()
 		if (Device::pending_events.load(std::memory_order_acquire))
 		{
 			uint64_t event_count = 0;
-			read(pfd.fd, &event_count, sizeof(uint64_t));
 			void* p_data = Device::global_queue.pop();
 
 			if (p_data != nullptr)
@@ -139,9 +137,11 @@ void Device::watchdog_process()
 		{
 			// Only timeout watchdog if no keys are being pressed down
 			if (poll(&pfd, 1, 
-				(Device::global_key_press_cnt.load(std::memory_order_acquire)) 
+				(
+					Device::global_key_press_cnt.load(std::memory_order_acquire)
 					? -1
-					: Device::timeout_length) < 0)
+					: Device::timeout_length
+				)) < 0)
 			{
 				std::cerr << "Poll failed: " << strerror(errno) << std::endl;   // Error while polling
 			}
@@ -158,12 +158,14 @@ void Device::watchdog_process()
 	}
 
 	// Close everything out
-	uint32_t active_devices_left = Device::active_devices.load(std::memory_order_acquire);
-	do
+	while (uint32_t active_devices_left = Device::active_devices.load())
 	{
 		Device::active_devices.wait(active_devices_left);
-		
-	} while ((active_devices_left = Device::active_devices.load()));
+	}
+	while (Device::global_queue.size())
+	{
+		free(global_queue.pop());
+	}
 
 	close(Device::event_signal_fd);
 	close(Device::poll_signal_fd);
@@ -209,8 +211,8 @@ void Device::input_monitor_process()
 
 	//uint8_t read_event = 0;	// Counter to prevent constant checks and enter polling mode if no input detected
 	unsigned key_press_cnt = 0;
-	bool process_event_mode = true;
-	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_FORCE_SYNC;
+	//bool process_event_mode = true;
+	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_NORMAL;
 	/* 
 		Allocate generic memory block
 		Memory structure:
@@ -231,12 +233,11 @@ void Device::input_monitor_process()
 	// Main loop
 	while (Device::is_exit.load(std::memory_order_acquire) == false)
 	{
-		if (process_event_mode == true)
+		if (libevdev_has_event_pending(this->dev))
 		{
 			switch(libevdev_next_event(this->dev, read_flag, &event_queue[*p_event_count]))
 			{
 				case -EAGAIN:	// No inputs are available
-					process_event_mode = false;
 					read_flag = LIBEVDEV_READ_FLAG_NORMAL;
 					break;
 
@@ -323,26 +324,15 @@ void Device::input_monitor_process()
 		}
 		else if ((Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed) && key_press_cnt == 0)	// Toggling local grab state (only grabs if no inputs are being received)
 		{
-			if (libevdev_has_event_pending(this->dev) == false)
-			{
-				this->device_is_grabbed = !this->device_is_grabbed;
-				libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
-				uint64_t msg = 0;
-				read(pfd[1].fd, &msg, sizeof(uint64_t));
-			}
+			this->device_is_grabbed = !this->device_is_grabbed;
+			libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
+			uint64_t msg = 0;
+			read(pfd[1].fd, &msg, sizeof(uint64_t));
 		}
-		else if (poll(pfd, 2, 500) < 0)	// Handle polling error
+		else if (poll(pfd, 2, -1) < 0)	// Handle polling error
 		{
 			std::cerr << "Input polling failed: " << strerror(errno) << std::endl;
 			break;
-		}
-		else if (libevdev_has_event_pending(this->dev))
-		{
-			process_event_mode = true;
-		}
-		else
-		{
-			continue;
 		}
 	}
 
