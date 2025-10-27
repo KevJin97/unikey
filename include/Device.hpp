@@ -29,6 +29,8 @@ class Device
 {
 	static inline void (*event_process)(struct input_event*, uint64_t) = print_event;
 	static inline Cyclic_Queue global_queue;
+	static inline Cyclic_Queue global_mem_bank;
+	static inline Cyclic_Queue global_id_queue;
 	static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
 	static inline std::vector<Device*> device_objects;
 	static inline std::thread watchdog_thread;
@@ -42,8 +44,10 @@ class Device
 	static inline std::atomic_bool is_exit{false};
 
 	static void watchdog_process();
+	static void hotplug_detect();
 
 	private:
+		unsigned id;
 		struct libevdev* dev = nullptr;
 		bool device_is_grabbed = false;
 		BitField local_key_state{KEY_CNT};
@@ -62,7 +66,7 @@ class Device
 		static void set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t));
 		static void initialize_devices(const std::string& directory);
 		static unsigned set_timeout_length(unsigned seconds);
-		static void trigger_activation();
+		static bool trigger_activation();
 		static void trigger_exit();
 		static void wait_for_exit();
 		static bool return_grab_state();

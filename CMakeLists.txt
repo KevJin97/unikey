@@ -16,6 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
 pkg_search_module(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(SDBUSCPP REQUIRED sdbus-c++)
+pkg_search_module(LIBUDEV REQUIRED libudev)
 
 file(GLOB UNIKEY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
@@ -25,6 +26,7 @@ target_include_directories(unikey
 	PRIVATE
 		${LIBEVDEV_INCLUDE_DIRS}
 		${SDBUSCPP_INCLUDE_DIRS}
+		${LIBUDEV_INCLUDE_DIRS}
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
@@ -32,4 +34,5 @@ target_link_libraries(unikey
 	PRIVATE
 		${LIBEVDEV_LIBRARIES}
 		${SDBUSCPP_LIBRARIES}
+		${LIBUDEV_LIBRARIES}
 )

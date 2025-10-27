@@ -2,6 +2,7 @@
 #include "BitField.hpp"
 
 #include "libevdev/libevdev.h"
+#include "libudev.h"
 
 #include <atomic>
 #include <cstddef>
@@ -12,12 +13,12 @@
 #include <cstdint>
 #include <ctime>
 #include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
 
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
-#include <poll.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <sys/poll.h>
 
 void Device::set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t))
@@ -36,19 +37,27 @@ void Device::initialize_devices(const std::string &directory)
 		}
 
 		Device::watchdog_thread = std::thread(watchdog_process);
-	}
+		std::string fullpath = directory.ends_with("/") ? directory.substr(0, directory.size() - 1) : directory;
 
-	std::string fullpath = directory.ends_with("/") ? directory.substr(0, directory.size() - 1) : directory;
-
-	for (const auto& entry : std::filesystem::directory_iterator(fullpath.c_str()))
-	{
-		if (entry.path().filename().string().starts_with("event"))
+		for (const auto& entry : std::filesystem::directory_iterator(fullpath.c_str()))
 		{
-			Device* p_device = new Device(fullpath + "/" + entry.path().filename().string());
-			if (p_device->dev != nullptr)
+			if (entry.path().filename().string().starts_with("event"))
 			{
-				Device::device_objects.push_back(p_device);
+				Device* p_device = new Device(fullpath + "/" + entry.path().filename().string());
+				if (p_device->dev != nullptr)
+				{
+					Device::device_objects.push_back(p_device);
+				}
 			}
+		}
+	}
+	else
+	{
+		Device* p_device = new Device(directory);
+		if (p_device->dev != nullptr && Device::device_objects[p_device->id] != nullptr)
+		{
+			delete Device::device_objects[p_device->id];
+			Device::device_objects[p_device->id] = p_device;
 		}
 	}
 }
@@ -67,14 +76,15 @@ unsigned Device::set_timeout_length(unsigned int seconds)
 	return seconds;
 }
 
-void Device::trigger_activation()
+bool Device::trigger_activation()
 {
-	Device::is_grabbed.exchange(!Device::is_grabbed.load(std::memory_order_acquire), std::memory_order_acq_rel);
+	bool prev_state = Device::is_grabbed.exchange(!Device::is_grabbed.load(std::memory_order_acquire), std::memory_order_acq_rel);
 
 	uint64_t message = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
 
 	Device::is_grabbed.notify_all();
+	return !prev_state;
 }
 
 void Device::trigger_exit()
@@ -106,6 +116,8 @@ bool Device::return_grab_state()
 
 void Device::watchdog_process()
 {
+	std::thread hotplug_process(Device::hotplug_detect);
+
 	struct pollfd pfd;
 	pfd.fd = Device::poll_signal_fd;
 	pfd.events = POLLIN;
@@ -126,7 +138,8 @@ void Device::watchdog_process()
 
 				Device::event_process(p_events, *message_length);
 				Device::pending_events.fetch_sub(1, std::memory_order_acq_rel);
-				free(p_data);
+				Device::global_mem_bank.push(p_data);
+				// free(p_data);
 			}
 		}
 		else if (Device::is_grabbed.load(std::memory_order_acquire))
@@ -160,11 +173,69 @@ void Device::watchdog_process()
 	}
 	while (Device::global_queue.size())
 	{
-		free(global_queue.pop());
+		free(Device::global_queue.pop());
+	}
+	while (Device::global_mem_bank.size())
+	{
+		free(Device::global_mem_bank.pop());
+	}
+	while (Device::global_id_queue.size())
+	{
+		Device::global_id_queue.pop();
 	}
 
 	close(Device::event_signal_fd);
 	close(Device::poll_signal_fd);
+	hotplug_process.join();
+}
+
+void Device::hotplug_detect()
+{
+	struct udev* udev = udev_new();
+	if (!udev)
+	{
+		std::cerr << "Can't create udev context!" << std::endl;
+		return;
+	}
+	
+	struct udev_monitor* mon = udev_monitor_new_from_netlink(udev, "udev");
+	if (!mon)
+	{
+		std::cerr << "Can't create udev monitor!" << std::endl;
+		return;
+	}
+
+	udev_monitor_filter_add_match_subsystem_devtype(mon, "input", NULL);
+	udev_monitor_enable_receiving(mon);
+	
+	struct pollfd pfd[2];
+	pfd[0].fd = udev_monitor_get_fd(mon);
+	pfd[0].events = POLLIN;
+	pfd[1].fd = Device::event_signal_fd;
+	pfd[1].events = POLLIN;
+
+	while (!Device::is_exit.load(std::memory_order_acquire))
+	{
+		poll(pfd, 2, -1);
+		if (pfd[0].revents & POLLIN)
+		{
+			struct udev_device* dev = udev_monitor_receive_device(mon);
+			if (dev)
+			{
+				std::string action = udev_device_get_action(dev);
+				const char* devnode = udev_device_get_devnode(dev);
+				std::string subsystem(udev_device_get_subsystem(dev));
+				if (action == "add" && devnode && subsystem == "input")
+				{
+					Device::initialize_devices(devnode);
+				}
+				udev_device_unref(dev);
+			}
+		}
+	}
+
+	udev_monitor_unref(mon);
+	udev_unref(udev);
 }
 
 Device::Device(const std::string& filepath)
@@ -179,6 +250,10 @@ Device::Device(const std::string& filepath)
 	{
 		if (libevdev_has_event_type(this->dev, EV_KEY) || libevdev_has_event_type(this->dev, EV_REL) || libevdev_has_event_type(this->dev, EV_ABS))
 		{
+			if (Device::global_id_queue.size() != 0)
+				this->id = *(unsigned*)Device::global_id_queue.pop();
+			else
+				this->id = Device::device_objects.size();
 			this->input_monitor_thread = std::thread(std::bind(&Device::input_monitor_process, this));
 			Device::active_devices.fetch_add(1, std::memory_order_acq_rel);
 			Device::active_devices.notify_all();
@@ -254,7 +329,11 @@ void Device::input_monitor_process()
 								Device::pending_events.fetch_add(1, std::memory_order_acq_rel); // Notify watchdog
 								Device::pending_events.notify_one();
 								
-								p_data = malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);	// Create new buffer
+								if (Device::global_mem_bank.size())
+									p_data = Device::global_mem_bank.pop();	// Use available buffer
+								else
+									p_data = malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);	// Create new buffer
+								
 								p_event_count = (uint64_t*)p_data;
 								event_queue = (struct input_event*)(p_event_count + 1);
 							}
@@ -300,6 +379,7 @@ void Device::input_monitor_process()
 					break;
 
 				default:
+					Device::global_id_queue.push(&this->id);
 					if (*p_event_count != 0)
 						for (std::size_t n = 0; n < *p_event_count; ++n)
 							if (event_queue[n].code == EV_KEY && event_queue[n].value != 0)

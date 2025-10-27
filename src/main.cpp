@@ -10,7 +10,6 @@
 
 int main(int argc, char* argv[])
 {
-
 	std::cout << std::endl;
 	// Device::set_event_processor(&print_event);
 	if (argc == 2)
@@ -28,16 +27,17 @@ int main(int argc, char* argv[])
 		= sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
 	unikey_dbus_obj->registerMethod("Trigger")
 		.onInterface("io.unikey.Device.Methods")
-			.implementedAs(&Device::trigger_activation);
+			.implementedAs(&dbus_trigger_cmd);
 	unikey_dbus_obj->registerMethod("Exit")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&Device::trigger_exit);
 	unikey_dbus_obj->finishRegistration();
-	unikey_dbus_connection->enterEventLoopAsync();
 
+	unikey_dbus_connection->enterEventLoopAsync();
 	Device::wait_for_exit();
+	unikey_dbus_connection->leaveEventLoop();
 	
-	std::cout << "Process 'unicode' has successfully exited" << std::endl;
+	std::cout << "Process 'unikey' has successfully exited" << std::endl;
 
 	return 0;
 }
