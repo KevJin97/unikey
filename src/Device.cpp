@@ -56,18 +56,12 @@ void Device::initialize_devices(const std::string &directory)
 unsigned Device::set_timeout_length(unsigned int seconds)
 {
 	constexpr unsigned MINMAX_TIME[2] = { 1, 900 };
-
+	
 	Device::is_grabbed.wait(true);
-	if (seconds < MINMAX_TIME[0])
-	{
-		// Warning: minimum time is 1 second
+	if (seconds < MINMAX_TIME[0])	// Warning: minimum time is 1 second
 		seconds = MINMAX_TIME[0];
-	}
-	else if (seconds > MINMAX_TIME[1])
-	{
-		// Warning: maximum time is 15 minutes
+	else if (seconds > MINMAX_TIME[1])	// Warning: maximum time is 15 minutes
 		seconds = MINMAX_TIME[1];
-	}
 
 	Device::timeout_length = seconds * 1000;
 	return seconds;
@@ -75,22 +69,19 @@ unsigned Device::set_timeout_length(unsigned int seconds)
 
 void Device::trigger_activation()
 {
-	static bool state = Device::is_grabbed.load();
-
-	while (Device::is_grabbed.compare_exchange_strong(state, !state, std::memory_order_acq_rel, std::memory_order_relaxed));
-	Device::is_grabbed.notify_all();
+	Device::is_grabbed.exchange(!Device::is_grabbed.load(std::memory_order_acquire), std::memory_order_acq_rel);
 
 	uint64_t message = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
+
+	Device::is_grabbed.notify_all();
 }
 
 void Device::trigger_exit()
 {
 	Device::is_exit.store(true, std::memory_order_release);
 	if (Device::is_grabbed.load() == false)
-	{
 		Device::trigger_activation();
-	}
 
 	uint64_t buffer = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &buffer, sizeof(uint64_t));
@@ -99,9 +90,13 @@ void Device::trigger_exit()
 
 	for (std::size_t n = 0; n < Device::device_objects.size(); ++n)
 	{
-		delete Device::device_objects[n];
-		Device::device_objects[n] = nullptr;
+		if (Device::device_objects[n] != nullptr)
+		{
+			delete Device::device_objects[n];
+			Device::device_objects[n] = nullptr;
+		}
 	}
+	Device::is_exit.notify_all();
 }
 
 bool Device::return_grab_state()
@@ -121,6 +116,7 @@ void Device::watchdog_process()
 		if (Device::pending_events.load(std::memory_order_acquire))
 		{
 			uint64_t event_count = 0;
+			read(pfd.fd, &event_count, sizeof(uint64_t));
 			void* p_data = Device::global_queue.pop();
 
 			if (p_data != nullptr)
@@ -303,7 +299,7 @@ void Device::input_monitor_process()
 					}
 					break;
 
-				default: 
+				default:
 					if (*p_event_count != 0)
 						for (std::size_t n = 0; n < *p_event_count; ++n)
 							if (event_queue[n].code == EV_KEY && event_queue[n].value != 0)
@@ -347,7 +343,7 @@ void Device::input_monitor_process()
 	Device::active_devices.notify_one();
 }
 
-BitField Device::return_enabled_local_key_states()
+BitField Device::return_enabled_local_key_states() const
 {
 	BitField enabled_codes(KEY_CNT);
 	for (unsigned code = 0; code < KEY_CNT; ++code)
@@ -360,7 +356,7 @@ BitField Device::return_enabled_local_key_states()
 	return enabled_codes;
 }
 
-BitField Device::return_enabled_local_rel_states()
+BitField Device::return_enabled_local_rel_states() const
 {
 	BitField enabled_codes(REL_CNT);
 	for (unsigned code = 0; code < REL_CNT; ++code)
@@ -397,4 +393,10 @@ BitField Device::return_enabled_global_rel_states()
 		}
 	}
 	return enabled_codes;
+}
+
+void Device::wait_for_exit()
+{
+	while (!Device::is_exit.load(std::memory_order_acquire))
+		Device::is_exit.wait(false, std::memory_order_acquire);
 }

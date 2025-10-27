@@ -14,7 +14,6 @@
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
 #include <sys/eventfd.h>
-#include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -65,14 +64,15 @@ class Device
 		static unsigned set_timeout_length(unsigned seconds);
 		static void trigger_activation();
 		static void trigger_exit();
+		static void wait_for_exit();
 		static bool return_grab_state();
 		static BitField return_enabled_global_key_states();
 		static BitField return_enabled_global_rel_states();
 
 		Device(const Device&) = delete;	// Delete copy constructor
 		Device& operator= (const Device&) = delete;	// Delete copy operator
-		BitField return_enabled_local_key_states();
-		BitField return_enabled_local_rel_states();
+		BitField return_enabled_local_key_states() const;
+		BitField return_enabled_local_rel_states() const;
 };
 
 
