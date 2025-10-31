@@ -1,13 +1,32 @@
 #include "unikey.hpp"
-#include "BitField.hpp"
+#include "Device.hpp"
 
-#include <asm-generic/socket.h>
-#include <atomic>
 #include <iostream>
-#include <sys/socket.h>
-#include <vector>
-#include <filesystem>
+
 #include <grp.h>
+#include <asm-generic/socket.h>
+#include <libudev.h>
+#include <sys/socket.h>
+
+#include <sdbus-c++/Message.h>
+
+void dbus_trigger_cmd()
+{
+	std::cout << (Device::trigger_activation() ? "\n---GRABBED---" : "\n--UNGRABBED--") << std::endl;
+}
+
+void dbus_set_timeout_cmd(sdbus::MethodCall call)
+{
+	uint32_t seconds;
+	call >> seconds;
+	Device::set_timeout_length(seconds);
+	call.createReply().send();
+}
+
+void send_formatted_data_wifi(const void* data, uint64_t unit_size)
+{
+	messenger_wifi.send_formatted_data(data, unit_size);
+}
 
 int change_group_permissions()
 {
