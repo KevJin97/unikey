@@ -23,11 +23,11 @@
 #include "Cyclic_Queue.hpp"
 
 // TODO: implement shared memory to modify is_grabbed and is_exit values externally
-void print_event(struct input_event* ev, uint64_t length);
+void print_event(const void* data, uint64_t data_unit_size=sizeof(struct input_event));
 
 class Device
 {
-	static inline void (*event_process)(struct input_event*, uint64_t) = print_event;
+	static inline void (*event_process)(const void*, uint64_t) = print_event;
 	static inline Cyclic_Queue global_queue;
 	static inline Cyclic_Queue global_mem_bank;
 	static inline Cyclic_Queue global_id_queue;
@@ -48,8 +48,8 @@ class Device
 
 	private:
 		unsigned id;
-		struct libevdev* dev = nullptr;
-		bool device_is_grabbed = false;
+		struct libevdev* dev=nullptr;
+		bool device_is_grabbed=false;
 		BitField local_key_state{KEY_CNT};
 		std::thread input_monitor_thread;
 
@@ -63,7 +63,7 @@ class Device
 		~Device();
 	
 	// PUBLIC INTERFACE
-		static void set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t));
+		static void set_event_processor(void (*event_processing_function)(const void*, uint64_t));
 		static void initialize_devices(const std::string& directory);
 		static unsigned set_timeout_length(unsigned seconds);
 		static bool trigger_activation();
@@ -80,10 +80,12 @@ class Device
 };
 
 
-inline void print_event(struct input_event* ev, uint64_t length)
+inline void print_event(const void* data, uint64_t data_unit_size)
 {
 	static bool KEY_POWER_detected = false;
-	for (uint64_t n = 0; n < length; ++n)
+	uint64_t& LENGTH = *(uint64_t*)data;
+	const struct input_event* ev = (struct input_event*)(&LENGTH + 1);
+	for (uint64_t n = 0; n < LENGTH; ++n)
 	{
 		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
 		if (ev[n].type == EV_KEY && ev[n].code == KEY_POWER)

@@ -21,7 +21,7 @@
 #include <sys/types.h>
 #include <sys/poll.h>
 
-void Device::set_event_processor(void (*event_processing_function)(struct input_event*, uint64_t))
+void Device::set_event_processor(void (*event_processing_function)(const void*, uint64_t))
 {
 	Device::event_process = event_processing_function;
 }
@@ -66,13 +66,13 @@ unsigned Device::set_timeout_length(unsigned int seconds)
 {
 	constexpr unsigned MINMAX_TIME[2] = { 1, 900 };
 	
-	Device::is_grabbed.wait(true);
 	if (seconds < MINMAX_TIME[0])	// Warning: minimum time is 1 second
 		seconds = MINMAX_TIME[0];
 	else if (seconds > MINMAX_TIME[1])	// Warning: maximum time is 15 minutes
 		seconds = MINMAX_TIME[1];
 
 	Device::timeout_length = seconds * 1000;
+
 	return seconds;
 }
 
@@ -133,13 +133,9 @@ void Device::watchdog_process()
 
 			if (p_data != nullptr)
 			{
-				uint64_t* message_length = (uint64_t*)p_data;
-				struct input_event* p_events = (struct input_event*)(message_length + 1);
-
-				Device::event_process(p_events, *message_length);
+				Device::event_process(p_data, sizeof(struct input_event));
 				Device::pending_events.fetch_sub(1, std::memory_order_acq_rel);
 				Device::global_mem_bank.push(p_data);
-				// free(p_data);
 			}
 		}
 		else if (Device::is_grabbed.load(std::memory_order_acquire))
@@ -148,8 +144,8 @@ void Device::watchdog_process()
 			if (poll(&pfd, 1, 
 				(
 					Device::global_key_press_cnt.load(std::memory_order_acquire)
-					? -1
-					: Device::timeout_length
+						? -1
+						: Device::timeout_length
 				)) < 0)
 			{
 				std::cerr << "Poll failed: " << strerror(errno) << std::endl;   // Error while polling
@@ -162,6 +158,7 @@ void Device::watchdog_process()
 		}
 		else
 		{
+			Device::pending_events.notify_all();
 			Device::is_grabbed.wait(false);
 		}
 	}
