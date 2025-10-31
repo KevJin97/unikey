@@ -11,20 +11,28 @@
 int main(int argc, char* argv[])
 {
 	std::cout << std::endl;
-	// Device::set_event_processor(&print_event);
+	messenger_wifi.connect_to_server("127.0.0.1");
+	messenger_wifi.wait_until_connected();
+	uint64_t hi = 67;
+	messenger_wifi.send_unformatted_data(&hi, sizeof(uint64_t));
+	Device::set_event_processor(send_formatted_data_wifi);
+
 	if (argc == 2)
 		std::cout << "Timeout Time set to: " << Device::set_timeout_length(atoi(argv[1])) << 's' << std::endl;
 
 	std::cout << "Initializing all available input sources..." << std::endl;
 	Device::initialize_devices("/dev/input");
-	std::cout << "Devices have been initialized" << std::endl;
-	std::cout << "Begin unikey" << std::endl;
+	std::cout << "Devices have been initialized..." << std::endl;
+	std::cout << "Begin unikey..." << std::endl;
 	
 	//register_to_dbus();
 	std::unique_ptr<sdbus::IConnection> unikey_dbus_connection
 		= sdbus::createSystemBusConnection("io.unikey.Device");
 	std::unique_ptr<sdbus::IObject> unikey_dbus_obj
 		= sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+
+	unikey_dbus_obj->registerMethod("io.unikey.Device.Methods",
+		"SetTimeout", "u", "", &dbus_set_timeout_cmd);
 	unikey_dbus_obj->registerMethod("Trigger")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&dbus_trigger_cmd);
@@ -37,7 +45,7 @@ int main(int argc, char* argv[])
 	Device::wait_for_exit();
 	unikey_dbus_connection->leaveEventLoop();
 	
-	std::cout << "Process 'unikey' has successfully exited" << std::endl;
+	std::cout << "Process 'unikey' has exited successfully" << std::endl;
 
 	return 0;
 }
