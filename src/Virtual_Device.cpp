@@ -52,12 +52,12 @@ void Virtual_Device::set_device_name(const std::string& device_name)
 	libevdev_set_name(this->dev, "Unikey HID Device");
 }
 
-void Virtual_Device::enable_codes(unsigned type, const BitField& enabled_key_field)
+void Virtual_Device::enable_codes(const unsigned type, const BitField& enabled_key_field)
 {
-	unsigned CNT = libevdev_event_type_get_max(type);
+	const unsigned MAX = libevdev_event_type_get_max(type);
 	libevdev_enable_event_type(this->dev, type);
 
-	for (unsigned code = 0; code < CNT; ++code)
+	for (unsigned code = 0; code <= MAX; ++code)
 	{
 		if (enabled_key_field.contains(code))
 		{
@@ -66,33 +66,31 @@ void Virtual_Device::enable_codes(unsigned type, const BitField& enabled_key_fie
 	}
 }
 
-void Virtual_Device::enable_codes(unsigned type, const std::vector<uint64_t>& bitfield)
+void Virtual_Device::enable_codes(const unsigned type, const std::vector<uint64_t>& bitfield)
 {
 	BitField codes;
 	codes.copy_bit_vector(bitfield);
 	this->enable_codes(type, codes);
 }
 
-void Virtual_Device::write_event(struct input_event& ev)
+void Virtual_Device::write_event(const struct input_event& ev)
 {
 	this->create_virt_device();
 	libevdev_uinput_write_event(this->virt_dev, ev.type, ev.code, ev.value);
 	libevdev_uinput_write_event(this->virt_dev, EV_SYN, SYN_REPORT, 0);
 }
 
-void Virtual_Device::write_event(struct input_event* ev_list, std::size_t list_size)
+void Virtual_Device::write_event(const struct input_event* ev_list, const std::size_t list_size)
 {
 	this->create_virt_device();
 	for (std::size_t n = 0; n < list_size; ++n)
 	{
 		libevdev_uinput_write_event(this->virt_dev, ev_list[n].type, ev_list[n].code, ev_list[n].value);
 	}
-	libevdev_uinput_write_event(this->virt_dev, EV_SYN, SYN_REPORT, 0);
 }
 
 void Virtual_Device::write_event(unsigned type, unsigned code, int value)
 {
 	this->create_virt_device();
 	libevdev_uinput_write_event(this->virt_dev, type, code, value);
-	libevdev_uinput_write_event(this->virt_dev, EV_SYN, SYN_REPORT, 0);
 }
