@@ -27,5 +27,5 @@ void* Cyclic_Queue::pop()
 
 std::size_t Cyclic_Queue::size() const
 {
-	return this->tail.load() - this->head.load();
+	return this->tail.load(std::memory_order_acquire) - this->head.load(std::memory_order_acquire);
 }

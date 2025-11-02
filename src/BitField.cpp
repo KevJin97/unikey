@@ -85,6 +85,16 @@ std::size_t BitField::vector_size() const
 	return this->bits.size();
 }
 
+const std::vector<uint64_t>& BitField::return_vector()
+{
+	return this->bits;
+}
+
+void BitField::copy_bit_vector(const std::vector<uint64_t>& bits)
+{
+	this->bits = bits;
+}
+
 BitField& BitField::operator=(const BitField& bitfield)
 {
 	this->bits = bitfield.bits;
