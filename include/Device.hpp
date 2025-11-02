@@ -1,6 +1,7 @@
 #ifndef DEVICE_HPP
 #define DEVICE_HPP
 
+#include <cstdint>
 #include <unistd.h>
 #include <vector>
 #include <atomic>
@@ -8,8 +9,6 @@
 #include <cstring>
 #include <assert.h>
 #include <fcntl.h>
-
-#include <iostream>
 
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
@@ -22,19 +21,20 @@
 #include "BitField.hpp"
 #include "Cyclic_Queue.hpp"
 
-// TODO: implement shared memory to modify is_grabbed and is_exit values externally
-void print_event(const void* data, uint64_t data_unit_size=sizeof(struct input_event));
-
 class Device
 {
-	static inline void (*event_process)(const void*, uint64_t) = print_event;
+	static void default_event_processor(const void* data, uint64_t unit_size=sizeof(struct input_event));
+	static void watchdog_process();
+	static void hotplug_detect();
+	
+	static inline void (*event_process)(const void*, const uint64_t) = Device::default_event_processor;
+	static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
+	static inline unsigned timeout_length = 30000;
 	static inline Cyclic_Queue global_queue;
 	static inline Cyclic_Queue global_mem_bank;
 	static inline Cyclic_Queue global_id_queue;
-	static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
 	static inline std::vector<Device*> device_objects;
 	static inline std::thread watchdog_thread;
-	static inline unsigned timeout_length = 30000;
 	static inline int poll_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
 	static inline int event_signal_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
 	static inline std::atomic_uint32_t active_devices{0};
@@ -42,9 +42,6 @@ class Device
 	static inline std::atomic_uint32_t global_key_press_cnt{0};
 	static inline std::atomic_bool is_grabbed{false};
 	static inline std::atomic_bool is_exit{false};
-
-	static void watchdog_process();
-	static void hotplug_detect();
 
 	private:
 		unsigned id;
@@ -78,43 +75,5 @@ class Device
 		BitField return_enabled_local_key_states() const;
 		BitField return_enabled_local_rel_states() const;
 };
-
-
-inline void print_event(const void* data, uint64_t data_unit_size)
-{
-	static bool KEY_POWER_detected = false;
-	uint64_t& LENGTH = *(uint64_t*)data;
-	const struct input_event* ev = (struct input_event*)(&LENGTH + 1);
-	for (uint64_t n = 0; n < LENGTH; ++n)
-	{
-		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
-		if (ev[n].type == EV_KEY && ev[n].code == KEY_POWER)
-		{
-			if (ev[n].value == 1)
-			{
-				KEY_POWER_detected = true;
-			}
-			else if (ev[n].value == 0 && KEY_POWER_detected == true)
-			{
-				// Device::trigger_activation();
-				if (n % 4 != 3)	std::cout << std::endl;
-				break;
-			}
-			else
-			{
-				continue;
-			}
-		}
-	}
-	if (KEY_POWER_detected == true && Device::return_grab_state() == false) 
-	{
-		std::cout << "\n--UNGRABBED--" << std::endl;
-		KEY_POWER_detected = false;
-	}
-	else
-	{
-		std::cout << std::endl;
-	}
-}
 
 #endif // DEVICE_HPP
