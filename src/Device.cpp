@@ -23,6 +23,22 @@
 
 void Device::set_event_processor(void (*event_processing_function)(const void*, uint64_t))
 {
+	static std::atomic_bool in_progress = false;
+	
+	bool prev_state = false;
+	while (!in_progress.compare_exchange_strong(prev_state, !prev_state))
+	{
+		in_progress.wait(false, std::memory_order_acquire);
+		prev_state = false;
+	}
+	if (Device::is_grabbed.load(std::memory_order_acquire))
+	{
+		Device::is_grabbed.wait(true, std::memory_order_acquire);
+	}
+	while (uint32_t ev_left = Device::pending_events.load(std::memory_order_release))
+	{
+		Device::pending_events.wait(ev_left, std::memory_order_acquire);
+	}
 	Device::event_process = event_processing_function;
 }
 
@@ -56,16 +72,38 @@ void Device::initialize_devices(const std::string &directory)
 		Device* p_device = new Device(directory);
 		if (p_device->dev != nullptr && Device::device_objects[p_device->id] != nullptr)
 		{
-			delete Device::device_objects[p_device->id];
-			Device::device_objects[p_device->id] = p_device;
+			if (p_device->id < Device::device_objects.size())
+			{
+				delete Device::device_objects[p_device->id];
+				Device::device_objects[p_device->id] = p_device;
+			}
+			else
+				Device::device_objects.push_back(p_device);
 		}
 	}
 }
 
 unsigned Device::set_timeout_length(unsigned int seconds)
 {
+	static std::atomic_bool in_progress = false;
 	constexpr unsigned MINMAX_TIME[2] = { 1, 900 };
 	
+	
+	bool prev_state = false;
+	while (!in_progress.compare_exchange_strong(prev_state, !prev_state))
+	{
+		in_progress.wait(false, std::memory_order_acquire);
+		prev_state = false;
+	}
+	if (Device::is_grabbed.load(std::memory_order_acquire))
+	{
+		Device::is_grabbed.wait(true, std::memory_order_acquire);
+	}
+	while (uint32_t ev_left = Device::pending_events.load(std::memory_order_release))
+	{
+		Device::pending_events.wait(ev_left, std::memory_order_acquire);
+	}
+
 	if (seconds < MINMAX_TIME[0])	// Warning: minimum time is 1 second
 		seconds = MINMAX_TIME[0];
 	else if (seconds > MINMAX_TIME[1])	// Warning: maximum time is 15 minutes
@@ -235,6 +273,17 @@ void Device::hotplug_detect()
 	udev_unref(udev);
 }
 
+void Device::default_event_processor(const void* data, uint64_t unit_size)
+{
+	uint64_t& LENGTH = *(uint64_t*)data;
+	const struct input_event* ev = (struct input_event*)(&LENGTH + 1);
+	for (uint64_t n = 0; n < LENGTH; ++n)
+	{
+		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
+	}
+	std::cout << std::endl;
+}
+
 Device::Device(const std::string& filepath)
 {
 	int fd = open(filepath.c_str(), O_RDONLY | O_NONBLOCK);
@@ -375,7 +424,7 @@ void Device::input_monitor_process()
 							break;
 
 						case EV_ABS:
-							++*p_event_count;
+							// ++*p_event_count;
 
 						default:
 							break;

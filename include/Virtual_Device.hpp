@@ -27,8 +27,9 @@ class Virtual_Device
 		void enable_codes(const unsigned type, const BitField& enabled_key_field);
 		void enable_codes(const unsigned type, const std::vector<uint64_t>& bitfield);
 		void write_event(const struct input_event& ev);
-		void write_event(const struct input_event* ev_list, const std::size_t list_size);
+		void write_event(const struct input_event* ev_list, const uint64_t& list_size);
 		void write_event(unsigned type=EV_SYN, unsigned code=SYN_REPORT, int value=0);
+		void clear();
 };
 
 #endif	// VIRTUAL_DEVICE_HPP
