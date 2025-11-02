@@ -9,15 +9,21 @@
 #include <sdbus-c++/Message.h>
 #include <sdbus-c++/sdbus-c++.h>
 
+inline std::unique_ptr<sdbus::IConnection> unikey_dbus_connection
+	= sdbus::createSystemBusConnection("io.unikey.Device");
+inline std::unique_ptr<sdbus::IObject> unikey_dbus_obj
+	= sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+
+extern void register_to_dbus();
 extern void dbus_trigger_cmd();
 extern void dbus_set_timeout_cmd(sdbus::MethodCall);
+extern void dbus_connect_to_ip(sdbus::MethodCall);
+extern void dbus_toggle_unikey_server();
 
 static WiFi_Client messenger_wifi;
 extern void send_formatted_data_wifi(const void* data, uint64_t unit_size=sizeof(struct input_event*));
 
 // extern void broadcast_service();
-extern void unikey_server();
-extern void unikey_client();
 extern int change_group_permissions();
 extern int return_to_original_group_permissions(int gid);
 
