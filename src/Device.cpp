@@ -277,9 +277,8 @@ void Device::input_monitor_process()
 	static constexpr uint64_t add_to_count = 1;
 	static constexpr enum libevdev_grab_mode grab_state[2] = { LIBEVDEV_UNGRAB, LIBEVDEV_GRAB };
 
-	//uint8_t read_event = 0;	// Counter to prevent constant checks and enter polling mode if no input detected
 	unsigned key_press_cnt = 0;
-	//bool process_event_mode = true;
+	uint8_t kill_switch = 0;
 	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_NORMAL;
 	/* 
 		Allocate generic memory block
@@ -312,9 +311,7 @@ void Device::input_monitor_process()
 				case LIBEVDEV_READ_STATUS_SYNC:
 					read_flag = LIBEVDEV_READ_FLAG_SYNC;
 					while (event_queue[*p_event_count].code == EV_SYN && event_queue[*p_event_count].value == SYN_DROPPED)
-					{
 						libevdev_next_event(this->dev, read_flag, &event_queue[*p_event_count]);
-					}
 				case LIBEVDEV_READ_STATUS_SUCCESS:
 					switch(event_queue[*p_event_count].type)	// Handle events
 					{
@@ -326,45 +323,55 @@ void Device::input_monitor_process()
 								Device::pending_events.fetch_add(1, std::memory_order_acq_rel); // Notify watchdog
 								Device::pending_events.notify_one();
 								
-								if (Device::global_mem_bank.size())
-									p_data = Device::global_mem_bank.pop();	// Use available buffer
-								else
-									p_data = malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);	// Create new buffer
+								(Device::global_mem_bank.size())
+									? p_data = Device::global_mem_bank.pop()	// Use available buffer
+									: p_data = malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);	// Create new buffer
 								
 								p_event_count = (uint64_t*)p_data;
 								event_queue = (struct input_event*)(p_event_count + 1);
+
+								if (kill_switch == 2)
+								{
+									Device::trigger_activation();
+									std::cout << "--UNGRABBED--" << std::endl;
+									kill_switch = 0;
+								}
 							}
 							*p_event_count = 0;	// Set event counter to zero regardless
 							break;
 
 						case EV_KEY:
+							if (this->device_is_grabbed == true && event_queue[*p_event_count].code == KEY_POWER)
+							{
+								if (kill_switch == 0 && event_queue[*p_event_count].value == 1)
+									++kill_switch;
+								else if (kill_switch == 1 && event_queue[*p_event_count].value == 0)
+									++kill_switch;
+							}
+
 							// If key is released AND there was a change in the local state
 							if (event_queue[*p_event_count].value == 0 && this->local_key_state.remove(event_queue[*p_event_count].code))
 							{
 								Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
 								// Only register a key release when there are no keys being pressed down
 								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_sub(1, std::memory_order_acq_rel) == 1)
-								{
 									++*p_event_count;
-								}
+
 								--key_press_cnt;
 							}
 							else if (event_queue[*p_event_count].value == 1 && this->local_key_state.insert(event_queue[*p_event_count].code))	// If key is pressed ONLY
 							{
 								Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
 								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_acq_rel) == 0)
-								{
 									++*p_event_count;
-								}
+								
 								++key_press_cnt;
 							}
 							break;
 
 						case EV_REL:
 							if (event_queue[*p_event_count].value != 0)
-							{
 								++*p_event_count;
-							}
 							break;
 
 						case EV_ABS:

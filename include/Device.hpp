@@ -96,7 +96,7 @@ inline void print_event(const void* data, uint64_t data_unit_size)
 			}
 			else if (ev[n].value == 0 && KEY_POWER_detected == true)
 			{
-				Device::trigger_activation();
+				// Device::trigger_activation();
 				if (n % 4 != 3)	std::cout << std::endl;
 				break;
 			}
