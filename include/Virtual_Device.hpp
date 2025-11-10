@@ -12,9 +12,11 @@
 class Virtual_Device
 {
 	private:
-		struct libevdev* dev=nullptr;
-		struct libevdev_uinput* virt_dev=nullptr;
+		std::string device_name;
+		struct libevdev* dev = nullptr;
+		struct libevdev_uinput* virt_dev = nullptr;
 
+		bool init_virt_libevdev();
 		void create_virt_device();
 	
 	public:

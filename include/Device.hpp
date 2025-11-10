@@ -45,8 +45,8 @@ class Device
 
 	private:
 		unsigned id;
-		struct libevdev* dev=nullptr;
-		bool device_is_grabbed=false;
+		struct libevdev* dev = nullptr;
+		bool device_is_grabbed = false;
 		BitField local_key_state{KEY_CNT};
 		std::thread input_monitor_thread;
 
