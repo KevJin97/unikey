@@ -88,9 +88,6 @@ bool WiFi_Server::is_connected_to_client() const
 
 void* WiFi_Server::read_sent_data(void* p_data)
 {	
-	static std::atomic_uint64_t blocks_left = 0;
-	static std::atomic_uint64_t block_size = 0;
-	
 	// Define a function that guarantees packet delivery of size min_bytes
 	ssize_t (*recv_all)(int, void*, ssize_t, int) = [](int __fd, void* __buf, ssize_t min_bytes, int __flags)
 	{
@@ -112,7 +109,7 @@ void* WiFi_Server::read_sent_data(void* p_data)
 	{
 		uint64_t bytes = 0;
 
-		if (blocks_left.load(std::memory_order_acquire) == 0)	// If previous recv was incomplete
+		if (this->blocks_left.load(std::memory_order_acquire) == 0)	// If previous recv was incomplete
 		{
 			if (recv_all(this->client_socket, &bytes, sizeof(bytes), 0) <= 0)	// Error or closed connection
 			{
@@ -125,9 +122,9 @@ void* WiFi_Server::read_sent_data(void* p_data)
 			}
 			else
 			{
-				block_size.store(bytes, std::memory_order_release);	// First recv_all returns size of a single block
+				this->block_size.store(bytes, std::memory_order_release);	// First recv_all returns size of a single block
 				recv_all(this->client_socket, &bytes, sizeof(bytes), 0);	// Second recv_all returns how many blocks
-				blocks_left.store(bytes, std::memory_order_release);	
+				this->blocks_left.store(bytes, std::memory_order_release);
 			}
 		}
 
@@ -140,7 +137,7 @@ void* WiFi_Server::read_sent_data(void* p_data)
 
 		auto total_bytes_remaining = [&]
 		{
-			return blocks_left.load(std::memory_order_acquire) * block_size.load(std::memory_order_acquire);
+			return this->blocks_left.load(std::memory_order_acquire) * this->block_size.load(std::memory_order_acquire);
 		};
 		
 		if (p_data == nullptr)	// If inputted buffer is not defined, then dynamically allocate.
@@ -169,19 +166,14 @@ void* WiFi_Server::read_sent_data(void* p_data)
 
 			bytes_read += received;	// Count total bytes read
 			p_data_buffer += received;	// Shift buffer memory location over
-		} while ((bytes_read % block_size.load(std::memory_order_acquire)) != 0);
+		} while ((bytes_read % this->block_size.load(std::memory_order_acquire)) != 0);
 
 		// Set the first 8 bytes of p_data to be how many data blocks were read
-		*(uint64_t*)p_data = (uint64_t)(bytes_read / block_size.load(std::memory_order_acquire));
+		*(uint64_t*)p_data = (uint64_t)(bytes_read / this->block_size.load(std::memory_order_acquire));
 
 		// Reset the atomic values if all data in the stream is grabbed.
-		if (blocks_left.fetch_sub(*(uint64_t*)p_data, std::memory_order_acq_rel) == *(uint64_t*)p_data)
-			block_size.store(0, std::memory_order_release);
-	}
-	else
-	{
-		blocks_left.store(0, std::memory_order_relaxed);
-		block_size.store(0, std::memory_order_relaxed);
+		if (this->blocks_left.fetch_sub(*(uint64_t*)p_data, std::memory_order_acq_rel) == *(uint64_t*)p_data)
+			this->block_size.store(0, std::memory_order_release);
 	}
 
 	return p_data;
@@ -196,4 +188,7 @@ void WiFi_Server::close_connection()
 	}
 
 	this->is_connected.store(false, std::memory_order_release);
+
+	this->blocks_left.store(0, std::memory_order_relaxed);
+	this->block_size.store(0, std::memory_order_relaxed);
 }

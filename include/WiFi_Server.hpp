@@ -16,6 +16,8 @@ class WiFi_Server
 		int client_socket = -1;
 		struct sockaddr_in server_addr;
 		std::atomic_bool is_connected = false;
+		std::atomic_uint64_t blocks_left = 0;
+		std::atomic_uint64_t block_size = 0;
 
 	public:
 		WiFi_Server();
