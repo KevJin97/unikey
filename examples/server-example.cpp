@@ -22,7 +22,7 @@ int main()
 		dev_server.begin_listening().wait_for_connection();
 		std::cout << "Device Connected" << std::endl;
 		p_data = (uint64_t*)dev_server.read_sent_data();	// Get enabled EV_KEY codes
-		virt_unikey.enable_codes(EV_KEY, std::vector<uint64_t>(1 + p_data, *p_data + p_data));
+		virt_unikey.enable_codes(EV_KEY, std::vector<uint64_t>(1 + p_data, 1 + *p_data + p_data));
 		free(p_data);
 		p_data = nullptr;
 
