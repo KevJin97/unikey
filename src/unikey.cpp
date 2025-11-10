@@ -67,8 +67,6 @@ void dbus_connect_to_ip(sdbus::MethodCall call)
 		messenger_wifi.wait_until_connected();
 		messenger_wifi.send_unformatted_data(Device::return_enabled_global_key_states().return_vector().data(),
 			sizeof(uint64_t), Device::return_enabled_global_key_states().return_vector().size());
-		messenger_wifi.send_unformatted_data(Device::return_enabled_global_rel_states().return_vector().data(),
-			sizeof(uint64_t), Device::return_enabled_global_rel_states().return_vector().size());
 	});
 	send_init_virtual_device_data.detach();
 }

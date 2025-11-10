@@ -40,6 +40,9 @@ void Device::set_event_processor(void (*event_processing_function)(const void*, 
 		Device::pending_events.wait(ev_left, std::memory_order_acquire);
 	}
 	Device::event_process = event_processing_function;
+
+	in_progress.store(false, std::memory_order_release);
+	in_progress.notify_all();
 }
 
 void Device::initialize_devices(const std::string &directory)
@@ -110,6 +113,9 @@ unsigned Device::set_timeout_length(unsigned int seconds)
 		seconds = MINMAX_TIME[1];
 
 	Device::timeout_length = seconds * 1000;
+
+	in_progress.store(false, std::memory_order_release);
+	in_progress.notify_all();
 
 	return seconds;
 }

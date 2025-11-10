@@ -9,20 +9,32 @@
 Virtual_Device::Virtual_Device()
 {
 	this->dev = libevdev_new();
+	libevdev_enable_property(this->dev, INPUT_PROP_POINTER);
 	libevdev_enable_event_type(this->dev, EV_SYN);
+	libevdev_enable_event_type(this->dev, EV_REL);
 	for (unsigned code = 0; code < SYN_CNT; ++code)
 	{
-		libevdev_enable_event_code(dev, EV_SYN, code, NULL);
+		libevdev_enable_event_code(this->dev, EV_SYN, code, NULL);
+	}
+	for (unsigned code = 0; code < REL_CNT; ++ code)
+	{
+		libevdev_enable_event_code(this->dev, EV_REL, code, NULL);
 	}
 }
 
 Virtual_Device::Virtual_Device(const std::string& device_name)
 {
 	this->dev = libevdev_new();
+	libevdev_enable_property(this->dev, INPUT_PROP_POINTER);
 	libevdev_enable_event_type(this->dev, EV_SYN);
+	libevdev_enable_event_type(this->dev, EV_REL);
 	for (unsigned code = 0; code < SYN_CNT; ++code)
 	{
 		libevdev_enable_event_code(this->dev, EV_SYN, code, NULL);
+	}
+	for (unsigned code = 0; code < REL_CNT; ++ code)
+	{
+		libevdev_enable_event_code(this->dev, EV_REL, code, NULL);
 	}
 
 	libevdev_set_name(this->dev, device_name.c_str());
@@ -71,6 +83,7 @@ void Virtual_Device::enable_codes(const unsigned type, const BitField& enabled_k
 		if (enabled_key_field.contains(code))
 		{
 			libevdev_enable_event_code(this->dev, type, code, NULL);
+			std::cout << "Enabled " << libevdev_event_value_get_name(type, code, 0) << std::endl;
 		}
 	}
 }
