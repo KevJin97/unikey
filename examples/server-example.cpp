@@ -24,6 +24,7 @@ int main()
 		p_data = (uint64_t*)dev_server.read_sent_data();	// Get enabled EV_KEY codes
 		virt_unikey.enable_codes(EV_KEY, std::vector<uint64_t>(1 + p_data, *p_data + p_data));
 		free(p_data);
+		p_data = nullptr;
 
 		std::cout << "Client has been connected" << std::endl;
 		while (dev_server.is_connected_to_client())
@@ -33,6 +34,7 @@ int main()
 				virt_unikey.write_event((struct input_event*)(1 + p_data), *p_data);	// Write received inputs
 				virt_unikey.write_event();	// Sends SYN_REPORT as default arguments
 				free(p_data);
+				p_data = nullptr;
 			}
 		}
 		virt_unikey.clear();

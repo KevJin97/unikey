@@ -27,7 +27,7 @@ class WiFi_Server
 		const WiFi_Server& begin_listening();
 		const WiFi_Server& wait_for_connection() const;
 		bool is_connected_to_client() const;
-		void* read_sent_data();
+		void* read_sent_data(void* p_data=nullptr);
 		void close_connection();
 };
 
