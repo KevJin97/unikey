@@ -60,7 +60,9 @@ const WiFi_Server& WiFi_Server::begin_listening()
 	}
 	std::thread listen_for_client([&]
 	{
-		if ((this->client_socket = accept(this->server_socket, (struct sockaddr*)&this->server_addr, (socklen_t*)&this->server_addr)) < 0)
+		socklen_t addr_len = sizeof(this->server_addr);
+		
+		if ((this->client_socket = accept(this->server_socket, (struct sockaddr*)&this->server_addr, &addr_len)) < 0)
 		{
 			perror("Client Connection Not Accepted");
 		}
