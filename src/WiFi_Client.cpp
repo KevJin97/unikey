@@ -1,10 +1,8 @@
 #include "WiFi_Client.hpp"
-//#include "Device.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-//#include <vector>
 
 #include <thread>
 #include <unistd.h>

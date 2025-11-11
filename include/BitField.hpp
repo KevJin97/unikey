@@ -30,7 +30,7 @@ class BitField
 		std::size_t max_bit_size() const;
 		std::size_t max_byte_size() const;
 		std::size_t vector_size() const;
-		const std::vector<uint64_t>& return_vector();
+		const std::vector<uint64_t>& return_vector() const;
 		void copy_bit_vector(const std::vector<uint64_t>& bits);
 
 	// OPERATOR OVERLOADS
