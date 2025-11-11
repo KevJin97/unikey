@@ -1,12 +1,9 @@
-#include <cstdint>
 #include <iostream>
-#include <linux/input.h>
-#include <stdint.h>
-#include <iostream>
-//#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
 #include <vector>
+#include <stdint.h>
+#include <unistd.h>
+
+#include <linux/input.h>
 
 #include "unikey.hpp"
 #include "Virtual_Device.hpp"
@@ -63,3 +60,5 @@ int main()
 
 	return 0;
 }
+
+#undef EVER
