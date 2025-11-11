@@ -138,8 +138,14 @@ void Virtual_Device::write_event(unsigned type, unsigned code, int value)
 
 void Virtual_Device::clear()
 {
-	libevdev_uinput_destroy(this->virt_dev);
-	this->virt_dev = nullptr;
-	libevdev_free(this->dev);
-	this->dev = nullptr;
+	if (this->virt_dev != nullptr)
+	{
+		libevdev_uinput_destroy(this->virt_dev);
+		this->virt_dev = nullptr;
+	}
+	if (this->dev != nullptr)
+	{
+		libevdev_free(this->dev);
+		this->dev = nullptr;
+	}
 }

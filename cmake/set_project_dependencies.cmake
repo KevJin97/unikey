@@ -1,0 +1,26 @@
+# Define Some Variables For Convenience
+
+set(PROJECT_SOURCES
+	src/BitField.cpp
+	src/Cyclic_Queue.cpp
+	src/Device.cpp
+	src/unikey.cpp
+	src/Virtual_Device.cpp
+	src/WiFi_Client.cpp
+	src/WiFi_Server.cpp
+)
+set(PROJECT_INCLUDE_DIRS
+	${LIBEVDEV_INCLUDE_DIRS}
+	${SDBUSCPP_INCLUDE_DIRS}
+	${LIBUDEV_INCLUDE_DIRS}
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+set(PROJECT_LIBRARIES
+	${LIBEVDEV_LIBRARIES}
+	${SDBUSCPP_LIBRARIES}
+	${LIBUDEV_LIBRARIES}
+)
+
+set(PROJECT_EXEC_NAME ${PROJECT_NAME})
+set(PROJECT_LIB_NAME "lib${PROJECT_NAME}")

@@ -85,7 +85,7 @@ std::size_t BitField::vector_size() const
 	return this->bits.size();
 }
 
-const std::vector<uint64_t>& BitField::return_vector()
+const std::vector<uint64_t>& BitField::return_vector() const
 {
 	return this->bits;
 }

@@ -10,7 +10,7 @@
 		{
 			"label": "release-compile-make",
 			"type": "shell",
-			"command": "cmake -S . -B bin -DCMAKE_BUILD_TYPE=Release && cmake --build bin"
+			"command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --install build"
 		},
 		{
 			"label": "build-debug-ninja",
@@ -25,7 +25,7 @@
 		{
 			"label": "release-compile-ninja",
 			"type": "shell",
-			"command": "cmake -S . -B bin -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build bin"
+			"command": "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --install build"
 		}
 	]
 }

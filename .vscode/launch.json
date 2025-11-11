@@ -14,7 +14,7 @@
 			"type": "lldb",
 			"request": "launch",
 			"name": "Release: CMake Project (Make)",
-			"program": "${workspaceFolder}/bin/${workspaceFolderBasename}",
+			"program": "${workspaceFolder}/build/${workspaceFolderBasename}",
 			"cwd": "${workspaceFolder}",
 			"preLaunchTask": "release-compile-make"
 		},
@@ -30,7 +30,7 @@
 			"type": "lldb",
 			"request": "launch",
 			"name": "Release: CMake Project (Ninja)",
-			"program": "${workspaceFolder}/bin/${workspaceFolderBasename}",
+			"program": "${workspaceFolder}/build/${workspaceFolderBasename}",
 			"cwd": "${workspaceFolder}",
 			"preLaunchTask": "release-compile-ninja"
 		}

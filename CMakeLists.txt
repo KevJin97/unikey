@@ -7,33 +7,53 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)	# required for editor
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(BUILD_SHARED_LIBS OFF)
+option(INSTALL_ON_SYSTEM "Install binary to the system" OFF)
 
-# Set Module Path
-# set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+# Set CMake Module Path
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-# Add Libraries
-#add_library(PROJECT_HEADER STATIC )
-
+# Module To Set Up Dependencies
 find_package(PkgConfig REQUIRED)
 pkg_search_module(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(SDBUSCPP REQUIRED sdbus-c++)
 pkg_search_module(LIBUDEV REQUIRED libudev)
 
-file(GLOB UNIKEY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
-project(unikey)
-add_executable(unikey ${UNIKEY_SOURCES})
-target_include_directories(unikey
-	PRIVATE
-		${LIBEVDEV_INCLUDE_DIRS}
-		${SDBUSCPP_INCLUDE_DIRS}
-		${LIBUDEV_INCLUDE_DIRS}
-		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+
+# Project Compile Instructions
+##################################################################################
+project(unikey
+	VERSION 0
+	DESCRIPTION "Wirelessly forward HID events to other devices"
+	HOMEPAGE_URL "https://github.com/KevJin97/unikey"
+	LANGUAGES CXX
 )
-target_link_libraries(unikey 
-	PRIVATE
-		${LIBEVDEV_LIBRARIES}
-		${SDBUSCPP_LIBRARIES}
-		${LIBUDEV_LIBRARIES}
+# Include CMake Modules Defined In The "./cmake" Directory
+	include(set_project_dependencies)
+	include(option_for_setting_install_dir_prefix)
+
+# Compile Project Library
+	add_library(${PROJECT_LIB_NAME} ${PROJECT_SOURCES})
+	include(set_library_bin_output_naming_format)
+	target_include_directories(${PROJECT_LIB_NAME} PUBLIC ${PROJECT_INCLUDE_DIRS})
+	target_link_libraries(${PROJECT_LIB_NAME} PUBLIC ${PROJECT_LIBRARIES})
+
+# Compile Project Executable
+	add_executable(${PROJECT_EXEC_NAME} src/main.cpp)
+	target_link_libraries(${PROJECT_EXEC_NAME} PRIVATE ${PROJECT_LIB_NAME})
+
+# Set Installation Paths Relative to 
+	include(set_relative_install_paths)
+##################################################################################
+
+
+
+# Compile Example Projects
+add_subdirectory(examples/unikey-server-example)
+
+# Custom Function
+add_custom_target(uninstall
+	COMMAND sh -c "echo 'Uninstalling unikey...'; xargs rm < ${CMAKE_BINARY_DIR}/install_manifest.txt;"
+	VERBATIM
 )
