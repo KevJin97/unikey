@@ -15,8 +15,14 @@
 
 #include <sdbus-c++/Message.h>
 
+std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
+std::unique_ptr<sdbus::IObject> unikey_dbus_obj;
+
 void register_to_dbus()
 {
+	unikey_dbus_connection = sdbus::createSystemBusConnection("io.unikey.Device");
+	unikey_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+
 	unikey_dbus_obj->registerMethod("io.unikey.Device.Methods",
 		"SetTimeout", "u", "", &dbus_set_timeout_cmd);
 
