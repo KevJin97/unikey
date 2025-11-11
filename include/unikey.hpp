@@ -9,10 +9,8 @@
 #include <sdbus-c++/Message.h>
 #include <sdbus-c++/sdbus-c++.h>
 
-inline std::unique_ptr<sdbus::IConnection> unikey_dbus_connection
-	= sdbus::createSystemBusConnection("io.unikey.Device");
-inline std::unique_ptr<sdbus::IObject> unikey_dbus_obj
-	= sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+extern std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
+extern std::unique_ptr<sdbus::IObject> unikey_dbus_obj;
 
 extern void register_to_dbus();
 extern void dbus_trigger_cmd();

@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <iostream>
+#include <linux/input.h>
 #include <stdint.h>
 #include <iostream>
 #include <sys/socket.h>
@@ -27,16 +28,19 @@ int main()
 		p_data = nullptr;
 
 		std::cout << "Client has been connected" << std::endl;
+		p_data = (uint64_t*)malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);
+		
 		while (dev_server.is_connected_to_client())
 		{
-			if ((p_data = (uint64_t*)dev_server.read_sent_data()) != nullptr)
+			if (dev_server.read_sent_data(p_data) != nullptr)
 			{
 				virt_unikey.write_event((struct input_event*)(1 + p_data), *p_data);	// Write received inputs
 				virt_unikey.write_event();	// Sends SYN_REPORT as default arguments
-				free(p_data);
-				p_data = nullptr;
 			}
 		}
+
+		free(p_data);
+		p_data = nullptr;
 		virt_unikey.clear();
 		virt_unikey.set_device_name("Unikey HID Device");
 		std::cout << "Client has been disconnected" << std::endl;
