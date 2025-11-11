@@ -30,6 +30,7 @@ class WiFi_Server
 		const WiFi_Server& wait_for_connection() const;
 		bool is_connected_to_client() const;
 		void* read_sent_data(void* p_data=nullptr);
+		void* read_sent_data_packet(void* p_data=nullptr);
 		void close_connection();
 };
 
