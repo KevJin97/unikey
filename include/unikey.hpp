@@ -11,6 +11,8 @@
 #include <sdbus-c++/Message.h>
 
 extern std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
+
+extern std::unique_ptr<sdbus::IObject> unikey_root_dbus_obj;
 extern std::unique_ptr<sdbus::IObject> unikey_device_dbus_obj;
 extern std::unique_ptr<sdbus::IObject> unikey_wifi_dbus_obj;
 

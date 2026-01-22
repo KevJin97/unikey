@@ -18,16 +18,26 @@
 #include <sdbus-c++/Message.h>
 
 std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
+
+std::unique_ptr<sdbus::IObject> unikey_root_dbus_obj;
 std::unique_ptr<sdbus::IObject> unikey_device_dbus_obj;
 std::unique_ptr<sdbus::IObject> unikey_wifi_dbus_obj;
 
 void register_to_dbus()
 {
+	// Initialize the D-Bus connection
 	unikey_dbus_connection = sdbus::createSystemBusConnection("io.unikey");
 	
+	// Create an object at the root
+	unikey_root_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey");
+	unikey_root_dbus_obj->addObjectManager();
+	unikey_root_dbus_obj->finishRegistration();
+	
+	// Add additional functionality to D-Bus
 	register_device_dbus_cmds();
 	register_wifi_dbus_cmds();
 	
+	// Begin listening to D-Bus Signals
 	unikey_dbus_connection->enterEventLoopAsync();
 }
 
@@ -86,12 +96,18 @@ void dbus_connect_to_ip(sdbus::MethodCall call)
 	messenger_wifi.connect_to_server();
 	Device::set_event_processor(send_formatted_data_wifi);
 
-	std::thread send_init_virtual_device_data([&]
-	{
-		messenger_wifi.wait_until_connected();
-		messenger_wifi.send_unformatted_data(Device::return_enabled_global_key_states().return_vector().data(),
-			sizeof(uint64_t), Device::return_enabled_global_key_states().return_vector().size());
-	});
+	std::thread send_init_virtual_device_data(
+		[&]()
+		{
+			messenger_wifi.wait_until_connected();
+			
+			messenger_wifi.send_unformatted_data(
+				Device::return_enabled_global_key_states().return_vector().data(),
+				sizeof(uint64_t),
+				Device::return_enabled_global_key_states().return_vector().size()
+			);
+		}
+	);
 	send_init_virtual_device_data.detach();
 }
 
