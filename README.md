@@ -22,7 +22,7 @@ or using ninja as the generator
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ```
 ## Allow the Executable To Run as Input Group
-This allows the buildary to change its group ID to 'Input' so that it can be run without requiring sudo permissions.
+This allows the binary to change its group ID to 'Input' so that it can be run without requiring sudo permissions.
 ```bash
 sudo setcap "cap_setgid=eip" ./build/unikey
 ```
