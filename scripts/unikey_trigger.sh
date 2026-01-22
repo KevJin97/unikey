@@ -1,6 +1,6 @@
 #!/bin/bash
 
-busctl --system call io.unikey.Device \
+busctl --system call io.unikey \
 	/io/unikey/Device \
 	io.unikey.Device.Methods \
 	Trigger

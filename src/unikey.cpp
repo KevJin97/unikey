@@ -2,6 +2,7 @@
 #include "BitField.hpp"
 #include "Device.hpp"
 #include "Virtual_Device.hpp"
+#include "WiFi_Client.hpp"
 #include "WiFi_Server.hpp"
 
 #include <atomic>
@@ -11,38 +12,66 @@
 #include <asm-generic/socket.h>
 #include <libudev.h>
 #include <linux/input.h>
+#include <memory>
+#include <sdbus-c++/IObject.h>
 #include <sys/socket.h>
 
 #include <sdbus-c++/Message.h>
 
 std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
-std::unique_ptr<sdbus::IObject> unikey_dbus_obj;
+
+std::unique_ptr<sdbus::IObject> unikey_root_dbus_obj;
+std::unique_ptr<sdbus::IObject> unikey_device_dbus_obj;
+std::unique_ptr<sdbus::IObject> unikey_wifi_dbus_obj;
 
 void register_to_dbus()
 {
-	unikey_dbus_connection = sdbus::createSystemBusConnection("io.unikey.Device");
-	unikey_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+	// Initialize the D-Bus connection
+	unikey_dbus_connection = sdbus::createSystemBusConnection("io.unikey");
+	
+	// Create an object at the root
+	unikey_root_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey");
+	unikey_root_dbus_obj->addObjectManager();
+	unikey_root_dbus_obj->finishRegistration();
+	
+	// Add additional functionality to D-Bus
+	register_device_dbus_cmds();
+	register_wifi_dbus_cmds();
+	
+	// Begin listening to D-Bus Signals
+	unikey_dbus_connection->enterEventLoopAsync();
+}
 
-	unikey_dbus_obj->registerMethod("io.unikey.Device.Methods",
+void register_device_dbus_cmds()
+{
+	unikey_device_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+
+	unikey_device_dbus_obj->registerMethod("io.unikey.Device.Methods",
 		"SetTimeout", "u", "", &dbus_set_timeout_cmd);
 
-	unikey_dbus_obj->registerMethod("io.unikey.Device.Methods",
-		"ConnectTo", "s", "", &dbus_connect_to_ip);
-
-	unikey_dbus_obj->registerMethod("ToggleServer")
-		.onInterface("io.unikey.Device.Methods")
-			.implementedAs(&dbus_toggle_unikey_server);
-
-	unikey_dbus_obj->registerMethod("Trigger")
+	unikey_device_dbus_obj->registerMethod("Trigger")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&dbus_trigger_cmd);
 
-	unikey_dbus_obj->registerMethod("Exit")
+	unikey_device_dbus_obj->registerMethod("Exit")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&Device::trigger_exit);
 
-	unikey_dbus_obj->finishRegistration();
-	unikey_dbus_connection->enterEventLoopAsync();
+	unikey_device_dbus_obj->finishRegistration();
+}
+
+void register_wifi_dbus_cmds()
+{
+	unikey_wifi_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/WiFi");
+
+	unikey_wifi_dbus_obj->registerMethod("io.unikey.WiFi.Methods",
+		"ConnectTo", "s", "", &dbus_connect_to_ip);
+	
+	unikey_wifi_dbus_obj->registerMethod("ToggleServer")
+		.onInterface("io.unikey.WiFi.Methods")
+			.implementedAs(&dbus_toggle_unikey_server);
+	
+	unikey_wifi_dbus_obj->finishRegistration();
 }
 
 void dbus_trigger_cmd()
@@ -58,22 +87,42 @@ void dbus_set_timeout_cmd(sdbus::MethodCall call)
 	call.createReply().send();
 }
 
+static WiFi_Client* messenger_wifi = nullptr;
 void dbus_connect_to_ip(sdbus::MethodCall call)
 {
 	std::string ip_addr_str;
 	call >> ip_addr_str;
 	call.createReply().send();
 	
-	messenger_wifi.set_server_addr(ip_addr_str.c_str());
-	messenger_wifi.connect_to_server();
-	Device::set_event_processor(send_formatted_data_wifi);
-
-	std::thread send_init_virtual_device_data([&]
+	if (messenger_wifi != nullptr)
 	{
-		messenger_wifi.wait_until_connected();
-		messenger_wifi.send_unformatted_data(Device::return_enabled_global_key_states().return_vector().data(),
-			sizeof(uint64_t), Device::return_enabled_global_key_states().return_vector().size());
-	});
+		delete messenger_wifi;
+		messenger_wifi = nullptr;
+	}
+
+	messenger_wifi = new WiFi_Client;
+	messenger_wifi->set_server_addr(ip_addr_str.c_str());
+	messenger_wifi->connect_to_server();
+
+	Device::set_event_processor(
+		[](const void* data, uint64_t unit_size)
+		{
+			messenger_wifi->send_formatted_data(data, unit_size);
+		}
+	);
+
+	std::thread send_init_virtual_device_data(
+		[&]()
+		{
+			messenger_wifi->wait_until_connected();
+
+			messenger_wifi->send_unformatted_data(
+				Device::return_enabled_global_key_states().return_vector().data(),
+				sizeof(uint64_t),
+				Device::return_enabled_global_key_states().return_vector().size()
+			);
+		}
+	);
 	send_init_virtual_device_data.detach();
 }
 
@@ -129,11 +178,6 @@ void dbus_toggle_unikey_server()
 		unikey_server_status.store(false, std::memory_order_release);
 		dev_server.close_connection();
 	}
-}
-
-void send_formatted_data_wifi(const void* data, uint64_t unit_size)
-{
-	messenger_wifi.send_formatted_data(data, unit_size);
 }
 
 int change_group_permissions()

@@ -12,10 +12,6 @@ int main()
 {
 	int old_gid = change_group_permissions();
 	std::cout << std::endl;
-	//messenger_wifi.connect_to_server("100.79.165.10");
-	//messenger_wifi.wait_until_connected();
-	//uint64_t hi = 67;
-	//messenger_wifi.send_unformatted_data(&hi, sizeof(uint64_t));
 
 	std::cout << "Initializing all available input sources..." << std::endl;
 	Device::initialize_devices("/dev/input");
