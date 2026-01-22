@@ -352,6 +352,30 @@ void Device::input_monitor_process()
 	pfd[1].fd = Device::event_signal_fd;
 	pfd[1].events = POLLIN;
 
+	// Records the initial EV_KEY state and updates shared global values
+	if (libevdev_has_event_type(this->dev, EV_KEY))
+	{
+		for (unsigned code = 0; code < KEY_CNT; ++code)
+		{
+			if (libevdev_has_event_code(this->dev, EV_KEY, code))
+			{
+				if (libevdev_get_event_value(this->dev, EV_KEY, code) == 1)
+				{
+					++key_press_cnt;
+					this->local_key_state.insert(code);
+
+					Device::global_key_press_cnt.fetch_add(1);
+					Device::global_key_state[code].fetch_add(1);
+				}
+			}
+		}
+	}
+	/* 
+		NOTE: In the main loop below, a redundant safety has been coded in where an insertion/removal in
+		local_key_state returns whether or not the actual value changed or not. The initialization loop
+		above ensures that no input grabs will occur for a device unless all keys have been released.
+	*/
+
 	// Main loop
 	while (Device::is_exit.load(std::memory_order_acquire) == false)
 	{
