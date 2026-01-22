@@ -30,7 +30,8 @@ This must be run every time the program is compiled
 
 ## Set System D-Bus Access Permissions For Unikey
 ```bash
-sudo cp ./files/io.unikey.Device.conf /etc/dbus-1/system.d/
+sudo cp ./files/io.unikey.conf /etc/dbus-1/system.d/
+sudo systemctl reload dbus.service
 ```
 
 ~/Projects/Test-Directory/bluetooth/bluetooth_scanner/build

@@ -11,38 +11,56 @@
 #include <asm-generic/socket.h>
 #include <libudev.h>
 #include <linux/input.h>
+#include <memory>
+#include <sdbus-c++/IObject.h>
 #include <sys/socket.h>
 
 #include <sdbus-c++/Message.h>
 
 std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
-std::unique_ptr<sdbus::IObject> unikey_dbus_obj;
+std::unique_ptr<sdbus::IObject> unikey_device_dbus_obj;
+std::unique_ptr<sdbus::IObject> unikey_wifi_dbus_obj;
 
 void register_to_dbus()
 {
-	unikey_dbus_connection = sdbus::createSystemBusConnection("io.unikey.Device");
-	unikey_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+	unikey_dbus_connection = sdbus::createSystemBusConnection("io.unikey");
+	
+	register_device_dbus_cmds();
+	register_wifi_dbus_cmds();
+	
+	unikey_dbus_connection->enterEventLoopAsync();
+}
 
-	unikey_dbus_obj->registerMethod("io.unikey.Device.Methods",
+void register_device_dbus_cmds()
+{
+	unikey_device_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Device");
+
+	unikey_device_dbus_obj->registerMethod("io.unikey.Device.Methods",
 		"SetTimeout", "u", "", &dbus_set_timeout_cmd);
 
-	unikey_dbus_obj->registerMethod("io.unikey.Device.Methods",
-		"ConnectTo", "s", "", &dbus_connect_to_ip);
-
-	unikey_dbus_obj->registerMethod("ToggleServer")
-		.onInterface("io.unikey.Device.Methods")
-			.implementedAs(&dbus_toggle_unikey_server);
-
-	unikey_dbus_obj->registerMethod("Trigger")
+	unikey_device_dbus_obj->registerMethod("Trigger")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&dbus_trigger_cmd);
 
-	unikey_dbus_obj->registerMethod("Exit")
+	unikey_device_dbus_obj->registerMethod("Exit")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&Device::trigger_exit);
 
-	unikey_dbus_obj->finishRegistration();
-	unikey_dbus_connection->enterEventLoopAsync();
+	unikey_device_dbus_obj->finishRegistration();
+}
+
+void register_wifi_dbus_cmds()
+{
+	unikey_wifi_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/WiFi");
+
+	unikey_wifi_dbus_obj->registerMethod("io.unikey.WiFi.Methods",
+		"ConnectTo", "s", "", &dbus_connect_to_ip);
+	
+	unikey_wifi_dbus_obj->registerMethod("ToggleServer")
+		.onInterface("io.unikey.WiFi.Methods")
+			.implementedAs(&dbus_toggle_unikey_server);
+	
+	unikey_wifi_dbus_obj->finishRegistration();
 }
 
 void dbus_trigger_cmd()

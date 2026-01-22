@@ -1,6 +1,6 @@
 #!/bin/bash
 
-busctl --system call io.unikey.Device \
-	/io/unikey/Device \
-	io.unikey.Device.Methods \
+busctl --system call io.unikey \
+	/io/unikey/WiFi \
+	io.unikey.WiFi.Methods \
 	ToggleServer
