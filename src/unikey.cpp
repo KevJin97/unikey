@@ -2,6 +2,7 @@
 #include "BitField.hpp"
 #include "Device.hpp"
 #include "Virtual_Device.hpp"
+#include "WiFi_Client.hpp"
 #include "WiFi_Server.hpp"
 
 #include <atomic>
@@ -86,22 +87,36 @@ void dbus_set_timeout_cmd(sdbus::MethodCall call)
 	call.createReply().send();
 }
 
+static WiFi_Client* messenger_wifi = nullptr;
 void dbus_connect_to_ip(sdbus::MethodCall call)
 {
 	std::string ip_addr_str;
 	call >> ip_addr_str;
 	call.createReply().send();
 	
-	messenger_wifi.set_server_addr(ip_addr_str.c_str());
-	messenger_wifi.connect_to_server();
-	Device::set_event_processor(send_formatted_data_wifi);
+	if (messenger_wifi != nullptr)
+	{
+		delete messenger_wifi;
+		messenger_wifi = nullptr;
+	}
+
+	messenger_wifi = new WiFi_Client;
+	messenger_wifi->set_server_addr(ip_addr_str.c_str());
+	messenger_wifi->connect_to_server();
+
+	Device::set_event_processor(
+		[](const void* data, uint64_t unit_size)
+		{
+			messenger_wifi->send_formatted_data(data, unit_size);
+		}
+	);
 
 	std::thread send_init_virtual_device_data(
 		[&]()
 		{
-			messenger_wifi.wait_until_connected();
-			
-			messenger_wifi.send_unformatted_data(
+			messenger_wifi->wait_until_connected();
+
+			messenger_wifi->send_unformatted_data(
 				Device::return_enabled_global_key_states().return_vector().data(),
 				sizeof(uint64_t),
 				Device::return_enabled_global_key_states().return_vector().size()
@@ -163,11 +178,6 @@ void dbus_toggle_unikey_server()
 		unikey_server_status.store(false, std::memory_order_release);
 		dev_server.close_connection();
 	}
-}
-
-void send_formatted_data_wifi(const void* data, uint64_t unit_size)
-{
-	messenger_wifi.send_formatted_data(data, unit_size);
 }
 
 int change_group_permissions()

@@ -1,8 +1,6 @@
 #ifndef UNIKEY_HPP
 #define UNIKEY_HPP
 
-#include "WiFi_Client.hpp"
-
 #include <linux/input.h>
 #include <memory>
 #include <sdbus-c++/sdbus-c++.h>
@@ -23,9 +21,6 @@ extern void dbus_trigger_cmd();
 extern void dbus_set_timeout_cmd(sdbus::MethodCall);
 extern void dbus_connect_to_ip(sdbus::MethodCall);
 extern void dbus_toggle_unikey_server();
-
-static WiFi_Client messenger_wifi;
-extern void send_formatted_data_wifi(const void* data, uint64_t unit_size=sizeof(struct input_event*));
 
 // extern void broadcast_service();
 extern int change_group_permissions();
