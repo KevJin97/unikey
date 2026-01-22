@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <iostream>
 
 #include <linux/input-event-codes.h>
@@ -1142,21 +1143,34 @@ void BlueZ_Interface::handle_advertisement_release()
 
 void BlueZ_Interface::create_agent_object()
 {
-	sdbus::MethodCall call;
-
 	agent = sdbus::createObject(*dbus_connection, "/io/unikey/ble/agent");
 
 	agent->registerMethod("Release")
 		.onInterface(BlueZ::AGENT_INTERFACE)
 		.implementedAs([this](){ this->handle_agent_release(); });
 
-	agent->registerMethod("io.unikey.Agent", "RequestPinCode", "o", "s", std::bind(&BlueZ_Interface::handle_request_pin_code, this, call));
-	agent->registerMethod("io.unikey.Agent", "DisplayPinCode", "os", "", std::bind(&BlueZ_Interface::handle_display_pin_code, this, call));
-	agent->registerMethod("io.unikey.Agent", "RequestPasskey", "o", "u", std::bind(&BlueZ_Interface::handle_request_passkey, this, call));
-	agent->registerMethod("io.unikey.Agent", "DisplayPasskey", "oqu", "", std::bind(&BlueZ_Interface::handle_display_passkey, this, call));
-	agent->registerMethod("io.unikey.Agent", "RequestConfirmation", "ou", "", std::bind(&BlueZ_Interface::handle_request_confirmation, this, call));
-	agent->registerMethod("io.unikey.Agent", "RequestAuthorization", "o", "", std::bind(&BlueZ_Interface::handle_request_authorization, this, call));
-	agent->registerMethod("io.unikey.Agent", "AuthorizeService", "os", "", std::bind(&BlueZ_Interface::handle_authorize_service, this, call));
+	// FIX: Use std::placeholders::_1 to indicate the call parameter will be provided at invocation time
+	// The previous code was binding a local stack variable which caused segfault
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "RequestPinCode", "o", "s", 
+		std::bind(&BlueZ_Interface::handle_request_pin_code, this, std::placeholders::_1));
+	
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "DisplayPinCode", "os", "", 
+		std::bind(&BlueZ_Interface::handle_display_pin_code, this, std::placeholders::_1));
+	
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "RequestPasskey", "o", "u", 
+		std::bind(&BlueZ_Interface::handle_request_passkey, this, std::placeholders::_1));
+	
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "DisplayPasskey", "oqu", "", 
+		std::bind(&BlueZ_Interface::handle_display_passkey, this, std::placeholders::_1));
+	
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "RequestConfirmation", "ou", "", 
+		std::bind(&BlueZ_Interface::handle_request_confirmation, this, std::placeholders::_1));
+	
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "RequestAuthorization", "o", "", 
+		std::bind(&BlueZ_Interface::handle_request_authorization, this, std::placeholders::_1));
+	
+	agent->registerMethod(BlueZ::AGENT_INTERFACE, "AuthorizeService", "os", "", 
+		std::bind(&BlueZ_Interface::handle_authorize_service, this, std::placeholders::_1));
 
 	agent->registerMethod("Cancel")
 		.onInterface(BlueZ::AGENT_INTERFACE)
