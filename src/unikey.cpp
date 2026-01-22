@@ -1,5 +1,6 @@
 #include "unikey.hpp"
 #include "BitField.hpp"
+#include "BlueZ_Interface.hpp"
 #include "Device.hpp"
 #include "Virtual_Device.hpp"
 #include "WiFi_Client.hpp"
@@ -23,6 +24,7 @@ std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
 std::unique_ptr<sdbus::IObject> unikey_root_dbus_obj;
 std::unique_ptr<sdbus::IObject> unikey_device_dbus_obj;
 std::unique_ptr<sdbus::IObject> unikey_wifi_dbus_obj;
+std::unique_ptr<sdbus::IObject> unikey_bluetooth_dbus_obj;
 
 void register_to_dbus()
 {
@@ -37,6 +39,7 @@ void register_to_dbus()
 	// Add additional functionality to D-Bus
 	register_device_dbus_cmds();
 	register_wifi_dbus_cmds();
+	register_bluetooth_dbus_cmds();
 	
 	// Begin listening to D-Bus Signals
 	unikey_dbus_connection->enterEventLoopAsync();
@@ -208,6 +211,133 @@ int return_to_original_group_permissions(int gid)
 	}
 	return 0;
 }
+
+// Bluetooth
+BlueZ_Interface* bluetooth_interface = nullptr;
+void dbus_start_bluetooth_hid()
+{
+	if (bluetooth_interface != nullptr)
+	{
+		std::cout << "Bluetooth HID already initialized" << std::endl;
+		return;
+	}
+
+	bluetooth_interface = new BlueZ_Interface("Unikey BLE HID");
+	
+	// Set up state change callback
+	bluetooth_interface->set_state_change_callback([](BlueZ_Interface::State state)
+	{
+		switch (state)
+		{
+			case BlueZ_Interface::State::DISCONNECTED:
+				std::cout << "Bluetooth: Disconnected" << std::endl;
+				break;
+			case BlueZ_Interface::State::ADVERTISING:
+				std::cout << "Bluetooth: Advertising..." << std::endl;
+				break;
+			case BlueZ_Interface::State::CONNECTING:
+				std::cout << "Bluetooth: Connecting..." << std::endl;
+				break;
+			case BlueZ_Interface::State::CONNECTED:
+				std::cout << "Bluetooth: Connected!" << std::endl;
+				break;
+			case BlueZ_Interface::State::PAIRING:
+				std::cout << "Bluetooth: Pairing..." << std::endl;
+				break;
+			case BlueZ_Interface::State::ERROR:
+				std::cout << "Bluetooth: Error occurred" << std::endl;
+				break;
+		}
+	});
+
+	if (!bluetooth_interface->initialize())
+	{
+		std::cerr << "Failed to initialize Bluetooth interface" << std::endl;
+		delete bluetooth_interface;
+		bluetooth_interface = nullptr;
+		return;
+	}
+
+	// Enable the same key codes that the physical devices support
+	bluetooth_interface->enable_key_codes(Device::return_enabled_global_key_states());
+
+	// Start advertising
+	if (!bluetooth_interface->start_advertising())
+	{
+		std::cerr << "Failed to start Bluetooth advertising" << std::endl;
+		return;
+	}
+
+	// Set the event processor to forward events via Bluetooth
+	Device::set_event_processor(&BlueZ_Interface::bluetooth_event_processor);
+
+	std::cout << "Bluetooth HID started successfully" << std::endl;
+}
+
+void dbus_stop_bluetooth_hid()
+{
+	if (bluetooth_interface == nullptr)
+	{
+		std::cout << "Bluetooth HID not running" << std::endl;
+		return;
+	}
+
+	bluetooth_interface->shutdown();
+	delete bluetooth_interface;
+	bluetooth_interface = nullptr;
+
+	// Reset to default event processor
+	Device::set_event_processor(nullptr);
+
+	std::cout << "Bluetooth HID stopped" << std::endl;
+}
+
+void register_bluetooth_dbus_cmds()
+{	
+	unikey_bluetooth_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Bluetooth");
+
+	unikey_bluetooth_dbus_obj->registerMethod("Start")
+		.onInterface("io.unikey.Bluetooth.Methods")
+		.implementedAs(&dbus_start_bluetooth_hid);
+
+	unikey_bluetooth_dbus_obj->registerMethod("Stop")
+		.onInterface("io.unikey.Bluetooth.Methods")
+		.implementedAs(&dbus_stop_bluetooth_hid);
+
+	unikey_bluetooth_dbus_obj->registerMethod("GetStatus")
+		.onInterface("io.unikey.Bluetooth.Methods")
+		.withOutputParamNames("status")
+		.implementedAs(&dbus_get_bluetooth_status);
+
+	unikey_bluetooth_dbus_obj->finishRegistration();
+}
+
+std::string dbus_get_bluetooth_status()
+{
+	if (bluetooth_interface == nullptr)
+	{
+		return "Not initialized";
+	}
+
+	switch (bluetooth_interface->get_state())
+	{
+		case BlueZ_Interface::State::DISCONNECTED:
+			return "Disconnected";
+		case BlueZ_Interface::State::ADVERTISING:
+			return "Advertising";
+		case BlueZ_Interface::State::CONNECTING:
+			return "Connecting";
+		case BlueZ_Interface::State::CONNECTED:
+			return "Connected to: " + bluetooth_interface->get_connected_device();
+		case BlueZ_Interface::State::PAIRING:
+			return "Pairing";
+		case BlueZ_Interface::State::ERROR:
+			return "Error";
+		default:
+			return "Unknown";
+	}
+}
+
 
 /*
 #include <arpa/inet.h>

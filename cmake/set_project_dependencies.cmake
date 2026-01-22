@@ -2,6 +2,7 @@
 
 set(PROJECT_SOURCES
 	src/BitField.cpp
+	src/BlueZ_Interface.cpp
 	src/Cyclic_Queue.cpp
 	src/Device.cpp
 	src/unikey.cpp
