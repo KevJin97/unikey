@@ -15,16 +15,16 @@ sudo apt install libbluetooth-dev libsdbus-c++-dev libevdev-dev libudev-dev
 ```
 ## Compile The Project
 ```bash
-cmake -S . -B bin -DCMAKE_BUILD_TYPE=Release && cmake --build bin
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ```
 or using ninja as the generator
 ```bash
-cmake -S . -B bin -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build bin
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ```
 ## Allow the Executable To Run as Input Group
-This allows the binary to change its group ID to 'Input' so that it can be run without requiring sudo permissions.
+This allows the buildary to change its group ID to 'Input' so that it can be run without requiring sudo permissions.
 ```bash
-sudo setcap "cap_setgid=eip" ./bin/unikey
+sudo setcap "cap_setgid=eip" ./build/unikey
 ```
 This must be run every time the program is compiled
 
