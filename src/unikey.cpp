@@ -1,27 +1,29 @@
 #include "unikey.hpp"
-#include "BitField.hpp"
-#include "Device.hpp"
-#include "Virtual_Device.hpp"
-#include "WiFi_Client.hpp"
-#include "WiFi_Server.hpp"
+#include "Bluetooth/unikey-bluetooth.hpp"
+#include "Core/BitField.hpp"
+#include "Core/Device.hpp"
+#include "WiFi/Virtual_Device.hpp"
+#include "WiFi/WiFi_Client.hpp"
+#include "WiFi/WiFi_Server.hpp"
 
 #include <atomic>
 #include <iostream>
+#include <memory>
 
-#include <grp.h>
 #include <asm-generic/socket.h>
+#include <grp.h>
 #include <libudev.h>
 #include <linux/input.h>
-#include <memory>
-#include <sdbus-c++/IObject.h>
 #include <sys/socket.h>
 
+#include <sdbus-c++/IObject.h>
 #include <sdbus-c++/Message.h>
 
 std::unique_ptr<sdbus::IConnection> unikey_dbus_connection;
 
 std::unique_ptr<sdbus::IObject> unikey_root_dbus_obj;
 std::unique_ptr<sdbus::IObject> unikey_device_dbus_obj;
+std::unique_ptr<sdbus::IObject> unikey_bluetooth_dbus_obj;
 std::unique_ptr<sdbus::IObject> unikey_wifi_dbus_obj;
 
 void register_to_dbus()
@@ -36,6 +38,7 @@ void register_to_dbus()
 	
 	// Add additional functionality to D-Bus
 	register_device_dbus_cmds();
+	register_bluetooth_dbus_cmds();
 	register_wifi_dbus_cmds();
 	
 	// Begin listening to D-Bus Signals
@@ -56,6 +59,26 @@ void register_device_dbus_cmds()
 	unikey_device_dbus_obj->registerMethod("Exit")
 		.onInterface("io.unikey.Device.Methods")
 			.implementedAs(&Device::trigger_exit);
+
+	unikey_device_dbus_obj->finishRegistration();
+}
+
+void register_bluetooth_dbus_cmds()
+{
+	unikey_bluetooth_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Bluetooth");
+	
+	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
+		"Scan", "", "", &dbus_scan_unikey_bluetooth);
+	
+	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
+		"ConnectTo", "s", "", &dbus_connect_unikey_bluetooth);
+
+	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
+		"SwapTarget", "s", "", &dbus_swap_target_unikey_bluetooth);
+
+	unikey_bluetooth_dbus_obj->registerMethod("DisableBluetooth")
+		.onInterface("io.unikey.Bluetooth.Methods")
+			.implementedAs(&dbus_disable_unikey_bluetooth);
 
 	unikey_device_dbus_obj->finishRegistration();
 }

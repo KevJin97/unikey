@@ -1,13 +1,14 @@
 #ifndef VIRTUAL_DEVICE_HPP
 #define VIRTUAL_DEVICE_HPP
 
+#include "Core/BitField.hpp"
+
 #include <string>
+
+#include <linux/input.h>
 
 #include "libevdev/libevdev.h"
 #include "libevdev/libevdev-uinput.h"
-#include "BitField.hpp"
-
-#include <linux/input.h>
 
 class Virtual_Device
 {

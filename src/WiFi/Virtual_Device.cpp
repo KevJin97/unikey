@@ -1,4 +1,4 @@
-#include "Virtual_Device.hpp"
+#include "WiFi/Virtual_Device.hpp"
 
 #include <iostream>
 #include <linux/input.h>

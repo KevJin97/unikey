@@ -1,5 +1,5 @@
-#include "Device.hpp"
-#include "BitField.hpp"
+#include "Core/Device.hpp"
+#include "Core/BitField.hpp"
 
 #include "libevdev/libevdev.h"
 #include "libudev.h"
@@ -20,6 +20,11 @@
 #include <linux/input.h>
 #include <sys/types.h>
 #include <sys/poll.h>
+
+void Device::set_event_processor()
+{
+	Device::set_event_processor(Device::default_event_processor);
+}
 
 void Device::set_event_processor(void (*event_processing_function)(const void*, uint64_t))
 {
