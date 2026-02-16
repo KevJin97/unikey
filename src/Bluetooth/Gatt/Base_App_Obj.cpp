@@ -9,7 +9,18 @@ bool Base_App_Obj::initialize()
 	{
 		if (this->root_obj->dbus_connection == nullptr)
 		{
-			this->new_connection = sdbus::createSystemBusConnection(path);
+			// Convert path name into bus name (Example: /org/bluez -> org.bluez)
+			std::string bus_name = this->path;
+			for (std::size_t n = 0; n < bus_name.size(); ++n)
+			{
+				if (bus_name[n] == '/')
+				{
+					bus_name[n] = '.';
+				}
+			}
+			bus_name = bus_name.substr(1, bus_name.size() - 1);
+
+			this->new_connection = sdbus::createSystemBusConnection(bus_name);
 			this->dbus_connection = this->new_connection.get();
 			this->root_obj = this;
 		}
@@ -21,6 +32,7 @@ bool Base_App_Obj::initialize()
 	
 	this->dbus_object = sdbus::createObject(*this->dbus_connection, this->get_full_path());
 
+	this->attempted_registration = true;
 	return this->attempted_registration;
 }
 
