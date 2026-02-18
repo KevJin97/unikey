@@ -3,11 +3,20 @@
 
 #include <string>
 
+Base_App_Obj* Base_App_Obj::get_root()
+{
+	if (this->root_obj == this)
+		return this;
+	return this->root_obj->get_root();
+}
+
 bool Base_App_Obj::initialize()
 {
 	if (this->dbus_connection == nullptr)
 	{
-		if (this->root_obj->dbus_connection == nullptr)
+		Base_App_Obj* root = this->get_root();
+
+		if (root->dbus_connection == nullptr)
 		{
 			// Convert path name into bus name (Example: /org/bluez -> org.bluez)
 			std::string bus_name = this->path;
@@ -26,7 +35,7 @@ bool Base_App_Obj::initialize()
 		}
 		else
 		{
-			this->dbus_connection = this->root_obj->dbus_connection;
+			this->dbus_connection = root->dbus_connection;
 		}
 	}
 	
@@ -34,6 +43,28 @@ bool Base_App_Obj::initialize()
 
 	this->attempted_registration = true;
 	return this->attempted_registration;
+}
+
+void Base_App_Obj::initialize_subtree()
+{
+	if (this->initialize())
+	{
+		this->register_object();
+	}
+
+	for (auto* child : this->subelements)
+	{
+		child->initialize_subtree();
+	}
+}
+
+bool Base_App_Obj::has_connection() const
+{
+	if (this->dbus_connection != nullptr)
+		return true;
+	if (this->root_obj != this)
+		return this->root_obj->has_connection();
+	return false;
 }
 
 Base_App_Obj::Base_App_Obj(const std::string& obj_path, const std::string& uuid, sdbus::IConnection* connection)
@@ -55,9 +86,14 @@ void Base_App_Obj::add_subelement(Base_App_Obj* base_obj)
 		base_obj->path = base_obj->path + std::to_string(this->subelements.size());
 		this->subelements.push_back(base_obj);
 		
-		if (base_obj->initialize())
+		/*
+			Only initialize immediately if we already have a connection
+			(i.e., we're part of a rooted tree). Otherwise, defer until
+			the subtree is attached to a rooted Application.
+		*/
+		if (this->has_connection())
 		{
-			base_obj->register_object();
+			base_obj->initialize_subtree();
 		}
 	}
 }
@@ -76,7 +112,7 @@ std::string Base_App_Obj::get_full_path() const
 std::string Base_App_Obj::get_parent_path() const
 {
 	if (this->root_obj == this)
-		return "/";
+		return this->path;
 
 	return this->root_obj->get_full_path();
 }

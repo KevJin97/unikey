@@ -26,6 +26,8 @@ class Base_App_Obj
 		std::unique_ptr<sdbus::IConnection> new_connection = nullptr;
 		sdbus::IConnection* dbus_connection = nullptr;
 
+		Base_App_Obj* get_root();
+
 	protected:
 		bool attempted_registration = false;
 		std::unique_ptr<sdbus::IObject> dbus_object;
@@ -34,6 +36,8 @@ class Base_App_Obj
 		std::vector<Base_App_Obj*> subelements;
 
 		bool initialize();
+		void initialize_subtree();
+		bool has_connection() const;
 		virtual void register_object() = 0;
 
 		Base_App_Obj(const std::string& obj_path="/", const std::string& uuid="", sdbus::IConnection* connection=nullptr);
