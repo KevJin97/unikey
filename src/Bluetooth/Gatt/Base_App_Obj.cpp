@@ -135,3 +135,13 @@ Base_App_Obj::~Base_App_Obj()
 	for (std::size_t n = 0; n < this->subelements.size(); ++n)
 		delete this->subelements[n];
 }
+
+const std::vector<Base_App_Obj*>& Base_App_Obj::operator()() const
+{
+	return this->subelements;
+}
+
+Base_App_Obj* Base_App_Obj::operator[](std::size_t index) const
+{
+	return this->subelements[index % this->subelements.size()];
+}
