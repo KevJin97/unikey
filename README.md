@@ -33,6 +33,3 @@ This must be run every time the program is compiled
 sudo cp ./files/io.unikey.conf /etc/dbus-1/system.d/
 sudo systemctl reload dbus.service
 ```
-
-~/Projects/Test-Directory/bluetooth/bluetooth_scanner/build
-/sys/bus/hid/devices
