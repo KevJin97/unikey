@@ -84,42 +84,31 @@ void BlueZ_Interface::create_advertisement()
 
 void BlueZ_Interface::register_advertisement()
 {
-	if (!this->ad_manager_proxy)
-		return;
-
-	OptionsMap options;
-
-	this->ad_manager_proxy->callMethodAsync("RegisterAdvertisement")
-		.onInterface("org.bluez.LEAdvertisingManager1")
-			.withArguments(sdbus::ObjectPath(this->ad_path), options)
-				.uponReplyInvoke(
-					[this](const sdbus::Error* error)
-					{
-						if (error)
-						{
-							std::cerr << "Advertisement registration failed: "
-								<< error->getMessage() << std::endl;
-						}
-						else
-						{
-							std::cout << "Advertisement registered successfully" << std::endl;
-							this->advertising.store(true, std::memory_order_release);
-							this->advertising.notify_all();
-						}
-					}
-				);
-}
-
-void BlueZ_Interface::unregister_advertisement()
-{
-	if (!this->ad_manager_proxy || !this->advertising.load(std::memory_order_acquire))
+	if (!this->bluez_proxy)
 		return;
 
 	try
 	{
-		this->ad_manager_proxy->callMethod("UnregisterAdvertisement")
-			.onInterface("org.bluez.LEAdvertisingManager1")
-				.withArguments(sdbus::ObjectPath(this->ad_path));
+		OptionsMap options;
+		this->bluez_proxy->RegisterAdvertisement(sdbus::ObjectPath(this->ad_path), options);
+		std::cout << "Advertisement registered successfully" << std::endl;
+		this->advertising.store(true, std::memory_order_release);
+		this->advertising.notify_all();
+	}
+	catch (const sdbus::Error& e)
+	{
+		std::cerr << "Advertisement registration failed: " << e.getMessage() << std::endl;
+	}
+}
+
+void BlueZ_Interface::unregister_advertisement()
+{
+	if (!this->bluez_proxy || !this->advertising.load(std::memory_order_acquire))
+		return;
+
+	try
+	{
+		this->bluez_proxy->UnregisterAdvertisement(sdbus::ObjectPath(this->ad_path));
 	}
 	catch (const sdbus::Error& e)
 	{
@@ -131,44 +120,33 @@ void BlueZ_Interface::unregister_advertisement()
 
 void BlueZ_Interface::register_gatt_application()
 {
-	if (!this->gatt_manager_proxy)
+	if (!this->bluez_proxy)
 		return;
-
-	OptionsMap options;
 
 	std::cout << "Registering GATT app at " << this->app->get_full_path() << std::endl;
 
-	this->gatt_manager_proxy->callMethodAsync("RegisterApplication")
-		.onInterface("org.bluez.GattManager1")
-			.withArguments(sdbus::ObjectPath(this->app->get_full_path()), options)
-				.uponReplyInvoke(
-					[this](const sdbus::Error* error)
-					{
-						if (error)
-						{
-							std::cerr << "GATT registration failed: "
-								<< error->getMessage() << std::endl;
-						}
-						else
-						{
-							std::cout << "GATT application registered successfully" << std::endl;
-							this->registered.store(true, std::memory_order_release);
-							this->registered.notify_all();
-						}
-					}
-				);
+	try
+	{
+		OptionsMap options;
+		this->bluez_proxy->RegisterApplication(sdbus::ObjectPath(this->app->get_full_path()), options);
+		std::cout << "GATT application registered successfully" << std::endl;
+		this->registered.store(true, std::memory_order_release);
+		this->registered.notify_all();
+	}
+	catch (const sdbus::Error& e)
+	{
+		std::cerr << "GATT registration failed: " << e.getMessage() << std::endl;
+	}
 }
 
 void BlueZ_Interface::unregister_gatt_application()
 {
-	if (!this->gatt_manager_proxy || !this->registered.load(std::memory_order_acquire))
+	if (!this->bluez_proxy || !this->registered.load(std::memory_order_acquire))
 		return;
 
 	try
 	{
-		this->gatt_manager_proxy->callMethod("UnregisterApplication")
-			.onInterface("org.bluez.GattManager1")
-				.withArguments(sdbus::ObjectPath(this->app->get_full_path()));
+		this->bluez_proxy->UnregisterApplication(sdbus::ObjectPath(this->app->get_full_path()));
 	}
 	catch (const sdbus::Error& e)
 	{
@@ -185,7 +163,7 @@ void BlueZ_Interface::monitor_connection()
 		BlueZ device objects. When a device's "Connected" property changes
 		to true, a BLE host has connected to us.
 	*/
-	if (!this->adapter_proxy)
+	if (!this->bluez_proxy)
 		return;
 
 	auto watcher = sdbus::createProxy(*this->connection, "org.bluez", "/");
@@ -247,21 +225,14 @@ bool BlueZ_Interface::enable(sdbus::IConnection& connection)
 		}
 		std::cout << "Found adapter: " << this->adapter_path << std::endl;
 
-		// Set adapter properties for HID
-		this->adapter_proxy = sdbus::createProxy(*this->connection, "org.bluez", this->adapter_path);
+		// Create the combined proxy for Adapter1 + GattManager1 + LEAdvertisingManager1
+		this->bluez_proxy = std::make_unique<BlueZ_Adapter_Proxy>(*this->connection, this->adapter_path);
 
 		// Ensure adapter is powered on and discoverable
 		try
 		{
-			this->adapter_proxy->callMethod("Set")
-				.onInterface("org.freedesktop.DBus.Properties")
-					.withArguments(std::string("org.bluez.Adapter1"),
-						std::string("Powered"), sdbus::Variant(true));
-
-			this->adapter_proxy->callMethod("Set")
-				.onInterface("org.freedesktop.DBus.Properties")
-					.withArguments(std::string("org.bluez.Adapter1"),
-						std::string("Discoverable"), sdbus::Variant(true));
+			this->bluez_proxy->Powered(true);
+			this->bluez_proxy->Discoverable(true);
 		}
 		catch (const sdbus::Error& e)
 		{
@@ -279,16 +250,6 @@ bool BlueZ_Interface::enable(sdbus::IConnection& connection)
 		this->app->add_subelement(this->hid_service);
 		this->app->add_subelement(this->dev_info_service);
 		this->app->add_subelement(this->battery_service);
-
-		// Get references to report characteristics for sending data
-		// HIDService subelements: [0]=HIDChar(2a4e), [1]=HIDChar(2a4a), [2]=HIDChar(2a4b), [3]=ReportChar(1), [4]=ReportChar(2)
-		// These are accessed through the base class subelements vector
-		// ReportChar pointers need to be set after the tree is built
-		// (They are subelements index 3 and 4 of the HIDService)
-
-		// Create proxies for BlueZ managers
-		this->gatt_manager_proxy = sdbus::createProxy(*this->connection, "org.bluez", this->adapter_path);
-		this->ad_manager_proxy = sdbus::createProxy(*this->connection, "org.bluez", this->adapter_path);
 
 		// Register GATT application
 		this->register_gatt_application();
@@ -317,9 +278,7 @@ void BlueZ_Interface::disable()
 	this->unregister_gatt_application();
 
 	this->ad_object.reset();
-	this->gatt_manager_proxy.reset();
-	this->ad_manager_proxy.reset();
-	this->adapter_proxy.reset();
+	this->bluez_proxy.reset();
 
 	if (this->app != nullptr)
 	{
@@ -330,8 +289,6 @@ void BlueZ_Interface::disable()
 	this->hid_service = nullptr;
 	this->dev_info_service = nullptr;
 	this->battery_service = nullptr;
-	this->report_char_1 = nullptr;
-	this->report_char_2 = nullptr;
 
 	this->connection = nullptr;
 

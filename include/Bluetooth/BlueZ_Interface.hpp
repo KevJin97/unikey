@@ -4,6 +4,7 @@
 #include "Bluetooth/Gatt/Application.hpp"
 #include "Bluetooth/Gatt/Base_App_Obj.hpp"
 #include "Bluetooth/BlueZ_HID_Services.hpp"
+#include "Bluetooth/org_bluez_proxy.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -14,16 +15,42 @@
 #include <sdbus-c++/IConnection.h>
 #include <sdbus-c++/IObject.h>
 #include <sdbus-c++/IProxy.h>
+#include <sdbus-c++/ProxyInterfaces.h>
 #include <sdbus-c++/Types.h>
+
+/*
+	Combined proxy for the BlueZ adapter object, which exposes
+	Adapter1, GattManager1, and LEAdvertisingManager1 on the same path.
+*/
+class BlueZ_Adapter_Proxy : public sdbus::ProxyInterfaces<
+	org::bluez::Adapter1_proxy,
+	org::bluez::GattManager1_proxy,
+	org::bluez::LEAdvertisingManager1_proxy>
+{
+	public:
+		BlueZ_Adapter_Proxy(sdbus::IConnection& connection, const std::string& path)
+		: sdbus::ProxyInterfaces<
+			org::bluez::Adapter1_proxy,
+			org::bluez::GattManager1_proxy,
+			org::bluez::LEAdvertisingManager1_proxy>(connection, "org.bluez", path)
+		{
+			this->registerProxy();
+		}
+
+		~BlueZ_Adapter_Proxy()
+		{
+			this->unregisterProxy();
+		}
+};
 
 class BlueZ_Interface
 {
 	private:
 		// D-Bus connection (non-owning, shared with the rest of the application)
 		sdbus::IConnection* connection = nullptr;
-		std::unique_ptr<sdbus::IProxy> gatt_manager_proxy;
-		std::unique_ptr<sdbus::IProxy> ad_manager_proxy;
-		std::unique_ptr<sdbus::IProxy> adapter_proxy;
+
+		// Combined proxy for adapter/gatt/advertising
+		std::unique_ptr<BlueZ_Adapter_Proxy> bluez_proxy;
 
 		// GATT Application tree
 		Application* app = nullptr;
@@ -51,23 +78,19 @@ class BlueZ_Interface
 		void unregister_gatt_application();
 		void monitor_connection();
 
-		// Pointers to report characteristics for sending HID data
-		ReportChar* report_char_1 = nullptr;
-		ReportChar* report_char_2 = nullptr;
-
 	public:
 		BlueZ_Interface() = default;
 		BlueZ_Interface(const BlueZ_Interface&) = delete;
 
 		~BlueZ_Interface();
 
-		// Connection lifecycle (mirrors WiFi_Client)
+		// Connection lifecycle
 		bool enable(sdbus::IConnection& connection);
 		void disable();
 		bool connection_status() const;
 		void wait_until_connected();
 
-		// Data transmission (mirrors WiFi_Client::send_formatted_data)
+		// Data transmission
 		void send_hid_report(uint8_t report_id, const void* data, uint64_t data_size) const;
 		void send_hid_report(uint8_t report_id, const std::vector<uint8_t>& report) const;
 
