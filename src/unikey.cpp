@@ -36,11 +36,12 @@ void register_to_dbus()
 	unikey_root_dbus_obj->addObjectManager();
 	unikey_root_dbus_obj->finishRegistration();
 	
+
 	// Add additional functionality to D-Bus
 	register_device_dbus_cmds();
 	register_bluetooth_dbus_cmds();
 	register_wifi_dbus_cmds();
-	
+
 	// Begin listening to D-Bus Signals
 	unikey_dbus_connection->enterEventLoopAsync();
 }
@@ -68,19 +69,13 @@ void register_bluetooth_dbus_cmds()
 	unikey_bluetooth_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Bluetooth");
 	
 	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
-		"Scan", "", "", &dbus_scan_unikey_bluetooth);
-	
-	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
-		"ConnectTo", "s", "", &dbus_connect_unikey_bluetooth);
-
-	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
-		"SwapTarget", "s", "", &dbus_swap_target_unikey_bluetooth);
+		"EnableBluetooth", "", "", &dbus_enable_unikey_bluetooth);
 
 	unikey_bluetooth_dbus_obj->registerMethod("DisableBluetooth")
 		.onInterface("io.unikey.Bluetooth.Methods")
 			.implementedAs(&dbus_disable_unikey_bluetooth);
 
-	unikey_device_dbus_obj->finishRegistration();
+	unikey_bluetooth_dbus_obj->finishRegistration();
 }
 
 void register_wifi_dbus_cmds()

@@ -3,8 +3,9 @@
 
 #include "Core/Device.hpp"
 
-#include <linux/input.h>
 #include <memory>
+
+#include <linux/input.h>
 
 #include <sdbus-c++/sdbus-c++.h>
 #include <sdbus-c++/IConnection.h>
