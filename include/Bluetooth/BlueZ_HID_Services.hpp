@@ -10,7 +10,7 @@
 #include <iostream>
 #include <string>
 
-// 
+// Battery Level Service
 class BatteryLevelChar : public Characteristic
 {
 	private:
@@ -33,7 +33,7 @@ class BatteryService : public Service
 };
 
 
-// 
+// Device Information Service
 class ReadChar : public Characteristic
 {
 	private:
@@ -56,7 +56,7 @@ class DeviceInfoService : public Service
 };
 
 
-// 
+// HID Service
 class HIDChar : public Characteristic
 {
 	private:
