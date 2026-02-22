@@ -1,11 +1,13 @@
 #ifndef UNIKEY_BLUETOOTH_HPP
 #define UNIKEY_BLUETOOTH_HPP
 
-#include <sdbus-c++/IObject.h>
-#include <sdbus-c++/Message.h>
 #include <stdint.h>
 
-extern void dbus_enable_unikey_bluetooth(sdbus::MethodCall call);
+#include <sdbus-c++/IObject.h>
+#include <sdbus-c++/Message.h>
+
+extern void dbus_set_bluetooth_name(sdbus::MethodCall call);
+extern void dbus_enable_unikey_bluetooth();
 extern void dbus_disable_unikey_bluetooth();
 
 // class BlueZ_Proxy :
