@@ -46,6 +46,7 @@ class Base_App_Obj
 		virtual ~Base_App_Obj();
 
 		void add_subelement(Base_App_Obj* base_obj);
+		const Base_App_Obj* get_subelement(std::size_t index) const;
 		std::string get_full_path() const;
 		std::string get_parent_path() const;
 		std::string get_root_path() const;

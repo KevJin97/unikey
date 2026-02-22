@@ -98,6 +98,11 @@ void Base_App_Obj::add_subelement(Base_App_Obj* base_obj)
 	}
 }
 
+const Base_App_Obj* Base_App_Obj::get_subelement(std::size_t index) const
+{
+	return (index >= this->subelements.size()) ? nullptr : this->subelements[index];
+}
+
 std::string Base_App_Obj::get_full_path() const
 {
 	if (this->root_obj == this)
