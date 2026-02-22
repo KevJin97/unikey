@@ -42,6 +42,16 @@ class ReadChar : public Characteristic
 	public:
 		ReadChar(const std::string& uuid, const std::string& value)
 			: Characteristic(uuid, { "read" }), values(value.begin(), value.end()) {}
+		
+		ByteArray on_read_value(OptionsMap) const override
+		{
+			return this->values;
+		}
+
+		void on_write_value(ByteArray values, OptionsMap) override
+		{
+			this->values = values;
+		}
 };
 
 class DeviceInfoService : public Service
@@ -90,6 +100,11 @@ class RefDesc : public Descriptor
 		{
 			this->values = values;
 		}
+
+		ByteArray on_read_value(OptionsMap) const override
+		{
+			return this->values;
+		}
 };
 
 class ReportChar : public Characteristic
@@ -101,6 +116,16 @@ class ReportChar : public Characteristic
 		ReportChar(uint8_t id) : Characteristic("2a4d", { "secure-read", "notify" })
 		{
 			this->add_subelement(new RefDesc({ id, 0x01 }));
+		}
+
+		ByteArray on_read_value(OptionsMap) const override
+		{
+			return this->values;
+		}
+
+		void on_write_value(ByteArray values, OptionsMap) override
+		{
+			this->values = values;
 		}
 };
 

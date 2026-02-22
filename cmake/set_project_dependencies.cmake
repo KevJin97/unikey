@@ -3,6 +3,7 @@
 set(PROJECT_SOURCES
 	src/unikey.cpp
 	src/Bluetooth/unikey-bluetooth.cpp
+	src/Bluetooth/BlueZ_Agent.cpp
 	src/Bluetooth/BlueZ_Interface.cpp
 	src/Bluetooth/Gatt/Base_App_Obj.cpp
 	src/Bluetooth/Gatt/Characteristic.cpp
