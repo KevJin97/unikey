@@ -187,6 +187,36 @@ void BlueZ_Interface::register_gatt_application()
 	}
 }
 
+void BlueZ_Interface::register_agent()
+{
+	if (!this->dbus_connection) return;
+
+	std::string agent_path = this->path_name + "/agent";
+	this->agent = std::make_unique<BlueZ_Agent>(*this->dbus_connection, agent_path);
+
+	try
+	{
+		this->bluez_agent_man_proxy->RegisterAgent(sdbus::ObjectPath(this->agent->get_path()), this->agent->get_capability());
+		std::cout << "Agent registered at " << this->agent->get_path() << " with capability: " << this->agent->get_capability() << std::endl;
+	}
+	catch (const sdbus::Error& e)
+	{
+		std::cerr << "Failed to register agent: " << e.getMessage() << std::endl;
+		this->agent.reset();
+		return;
+	}
+
+	try
+	{
+		this->bluez_agent_man_proxy->RequestDefaultAgent(sdbus::ObjectPath(this->agent->get_path()));
+		std::cout << "Agent set as default" << std::endl;
+	}
+	catch (const sdbus::Error& e)
+	{
+		std::cerr << "Failed to set default agent: " << e.getMessage() << std::endl;
+	}
+}
+
 void BlueZ_Interface::unregister_advertisement()
 {
 	if (!this->bluez_proxy || !this->advertising.load(std::memory_order_acquire)) return;
@@ -221,19 +251,36 @@ void BlueZ_Interface::unregister_gatt_application()
 	this->registered.store(false, std::memory_order_release);
 }
 
+void BlueZ_Interface::unregister_agent()
+{
+	if (!this->agent || !this->dbus_connection) return;
+
+	try
+	{
+		this->bluez_agent_man_proxy->UnregisterAgent(sdbus::ObjectPath(this->agent->get_path()));
+		std::cout << "Agent has been unregistered" << std::endl;
+	}
+	catch (const sdbus::Error& e)
+	{
+		std::cerr << "Failed to unregister agent: " << e.getMessage() << std::endl;
+	}
+
+	this->agent.reset();
+}
+
 void BlueZ_Interface::monitor_connection()
 {
 	if (!this->bluez_proxy) return;
 
 	std::unique_ptr<sdbus::IProxy> watcher = sdbus::createProxy(*this->dbus_connection, "org.bluez", "/");
-	watcher->registerSignalHandler("org.freedesktop.Dbus.ObjectManager", "InterfacesAdded", 
+	watcher->registerSignalHandler("org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
 		[this](sdbus::Signal signal)
 		{
 			sdbus::ObjectPath obj_path;
 			InterfacesMap interfaces;
 			signal >> obj_path >> interfaces;
 
-			if (interfaces.contains("org.bluez.Devices1"))
+			if (interfaces.contains("org.bluez.Device1"))
 			{
 				std::unique_ptr<sdbus::IProxy> device_proxy = sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path);
 				
@@ -250,6 +297,18 @@ void BlueZ_Interface::monitor_connection()
 									if (this->connected_to_host.load(std::memory_order_acquire))
 									{
 										std::cout << "BLE device connected: " << obj_path << std::endl;
+
+										try
+										{
+											// Allow devices to reconnect without re-pairing
+											sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path)->setProperty("Trusted")
+												.onInterface("org.bluez.Device1")
+													.toValue(true);
+										}
+										catch (const sdbus::Error& e)
+										{
+											std::cerr << "Failed to set device as trusted: " << e.getMessage() << std::endl;
+										}
 									}
 									else
 									{
@@ -286,6 +345,7 @@ BlueZ_Interface::BlueZ_Interface(sdbus::IConnection* dbus_connection, const std:
 		}
 	}
 	this->path_name = "/" + this->path_name + "/Bluetooth";
+	this->bluez_agent_man_proxy = std::make_unique<BlueZ_Agent_Manager_Proxy>(*this->dbus_connection, "/org/bluez");
 }
 
 BlueZ_Interface::BlueZ_Interface(const std::unique_ptr<sdbus::IConnection>& dbus_connection, const std::string& connection_name) : BlueZ_Interface(dbus_connection.get(), connection_name) {}
@@ -358,14 +418,18 @@ bool BlueZ_Interface::enable()
 		{
 			this->orig_powered_state = this->bluez_proxy->Powered();
 			this->orig_discover_state = this->bluez_proxy->Discoverable();
+			this->orig_pairable_state = this->bluez_proxy->Pairable();
 
 			this->bluez_proxy->Powered(true);
 			this->bluez_proxy->Discoverable(true);
+			this->bluez_proxy->Pairable(true);
 		}
 		catch (const sdbus::Error& e)
 		{
 			std::cerr << "Warning: Bluetooth adapter properties could not be set: " << e.getMessage() << std::endl;
 		}
+
+		this->register_agent();
 
 		this->gatt_app = new Application(this->path_name + "/GattApplication", this->dbus_connection);
 		this->gatt_app->add_subelement(new HIDService);
@@ -404,9 +468,11 @@ void BlueZ_Interface::disable()
 	// Set configurations back to original values
 	this->bluez_proxy->Powered(this->orig_powered_state);
 	this->bluez_proxy->Discoverable(this->orig_discover_state);
+	this->bluez_proxy->Pairable(this->orig_pairable_state);
 
 	this->unregister_advertisement();
 	this->unregister_gatt_application();
+	this->unregister_agent();
 
 	this->ad_object.reset();
 	this->bluez_proxy.reset();

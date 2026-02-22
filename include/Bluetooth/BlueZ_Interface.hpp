@@ -2,6 +2,8 @@
 #define BLUEZ_INTERFACE_HPP
 
 #include "Bluetooth/Gatt/Application.hpp"
+#include "Bluetooth/BlueZ_Agent.hpp"
+#include "Bluetooth/org_bluez_agent_manager_proxy.hpp"
 #include "Bluetooth/org_bluez_proxy.hpp"
 
 #include <memory>
@@ -13,8 +15,9 @@
 
 class BlueZ_Interface;
 
-class BlueZ_Adapter_Proxy : public 
-	sdbus::ProxyInterfaces<
+class BlueZ_Adapter_Proxy :
+	public sdbus::ProxyInterfaces
+	<
 		org::bluez::Adapter1_proxy,
 		org::bluez::GattManager1_proxy,
 		org::bluez::LEAdvertisingManager1_proxy
@@ -37,6 +40,22 @@ class BlueZ_Adapter_Proxy : public
 		}
 };
 
+class BlueZ_Agent_Manager_Proxy : public sdbus::ProxyInterfaces<org::bluez::AgentManager1_proxy>
+{
+	friend BlueZ_Interface;
+
+	public:
+		BlueZ_Agent_Manager_Proxy(sdbus::IConnection& connection, const std::string& path) : sdbus::ProxyInterfaces<org::bluez::AgentManager1_proxy>(connection, "org.bluez", path)
+		{
+			this->registerProxy();
+		}
+
+		~BlueZ_Agent_Manager_Proxy()
+		{
+			this->unregisterProxy();
+		}
+};
+
 class BlueZ_Interface
 {
 	private:
@@ -47,9 +66,12 @@ class BlueZ_Interface
 		std::string path_name;
 		Application* gatt_app = nullptr;
 		std::unique_ptr<BlueZ_Adapter_Proxy> bluez_proxy;
+		std::unique_ptr<BlueZ_Agent_Manager_Proxy> bluez_agent_man_proxy;
 		bool orig_powered_state = false;
 		bool orig_discover_state = false;
+		bool orig_pairable_state = false;
 		std::unique_ptr<sdbus::IObject> ad_object;
+		std::unique_ptr<BlueZ_Agent> agent;
 		std::atomic_bool connected_to_host = false;
 		std::atomic_bool advertising = false;
 		std::atomic_bool registered = false;
@@ -59,8 +81,10 @@ class BlueZ_Interface
 		void create_advertisement();
 		void register_advertisement();
 		void register_gatt_application();
+		void register_agent();
 		void unregister_advertisement();
 		void unregister_gatt_application();
+		void unregister_agent();
 		void monitor_connection();
 
 	public:
