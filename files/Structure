@@ -1,0 +1,199 @@
+io.unikey (D-Bus connection name)
+│
+└── /io/unikey/Bluetooth (Application Root)
+    │
+    ├── Interface: org.freedesktop.DBus.ObjectManager
+    │   └── Methods:
+    │       └── GetManagedObjects() → a{oa{sa{sv}}}
+    │
+    ├── /io/unikey/Bluetooth/service0 (HID Service - UUID: 0x1812)
+    │   │
+    │   ├── Interface: org.bluez.GattService1
+    │   │   └── Properties:
+    │   │       ├── UUID          : string    (read) = "00001812-0000-1000-8000-00805f9b34fb"
+    │   │       ├── Primary       : boolean   (read) = true
+    │   │       ├── Device        : object    (read, optional) - set by BlueZ
+    │   │       ├── Includes      : ao        (read, optional) - included services
+    │   │       └── Handle        : uint16    (read, optional) - set by BlueZ
+    │   │
+    │   ├── /io/unikey/Bluetooth/service0/char0 (Protocol Mode - UUID: 0x2A4E)
+    │   │   │
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       ├── Properties:
+    │   │       │   ├── UUID        : string   (read) = "00002a4e-0000-1000-8000-00805f9b34fb"
+    │   │       │   ├── Service     : object   (read) = /io/unikey/Bluetooth/service0
+    │   │       │   ├── Value       : ay       (read, optional)
+    │   │       │   ├── Flags       : as       (read) = ["read", "write-without-response"]
+    │   │       │   ├── Handle      : uint16   (read, optional)
+    │   │       │   └── Descriptors : ao       (read) = []
+    │   │       └── Methods:
+    │   │           ├── ReadValue(a{sv} options) → ay
+    │   │           └── WriteValue(ay value, a{sv} options) → void
+    │   │
+    │   ├── /io/unikey/Bluetooth/service0/char1 (HID Information - UUID: 0x2A4A)
+    │   │   │
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       ├── Properties:
+    │   │       │   ├── UUID        : string   (read) = "00002a4a-0000-1000-8000-00805f9b34fb"
+    │   │       │   ├── Service     : object   (read) = /io/unikey/Bluetooth/service0
+    │   │       │   ├── Flags       : as       (read) = ["read"]
+    │   │       │   └── Descriptors : ao       (read) = []
+    │   │       └── Methods:
+    │   │           └── ReadValue(a{sv} options) → ay  (returns: [0x11, 0x01, 0x00, 0x02])
+    │   │                                              (bcdHID=1.11, bCountryCode=0, Flags=2)
+    │   │
+    │   ├── /io/unikey/Bluetooth/service0/char2 (Report Map - UUID: 0x2A4B)
+    │   │   │
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       ├── Properties:
+    │   │       │   ├── UUID        : string   (read) = "00002a4b-0000-1000-8000-00805f9b34fb"
+    │   │       │   ├── Service     : object   (read) = /io/unikey/Bluetooth/service0
+    │   │       │   ├── Flags       : as       (read) = ["read"]
+    │   │       │   └── Descriptors : ao       (read) = []
+    │   │       └── Methods:
+    │   │           └── ReadValue(a{sv} options) → ay  (returns HID Report Descriptor bytes)
+    │   │
+    │   ├── /io/unikey/Bluetooth/service0/char3 (HID Control Point - UUID: 0x2A4C)
+    │   │   │
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       ├── Properties:
+    │   │       │   ├── UUID        : string   (read) = "00002a4c-0000-1000-8000-00805f9b34fb"
+    │   │       │   ├── Service     : object   (read) = /io/unikey/Bluetooth/service0
+    │   │       │   ├── Flags       : as       (read) = ["write-without-response"]
+    │   │       │   └── Descriptors : ao       (read) = []
+    │   │       └── Methods:
+    │   │           └── WriteValue(ay value, a{sv} options) → void  (0x00=Suspend, 0x01=ExitSuspend)
+    │   │
+    │   ├── /io/unikey/Bluetooth/service0/char4 (Input Report - UUID: 0x2A4D)
+    │   │   │
+    │   │   ├── Interface: org.bluez.GattCharacteristic1
+    │   │   │   ├── Properties:
+    │   │   │   │   ├── UUID        : string   (read) = "00002a4d-0000-1000-8000-00805f9b34fb"
+    │   │   │   │   ├── Service     : object   (read) = /io/unikey/Bluetooth/service0
+    │   │   │   │   ├── Flags       : as       (read) = ["read", "notify"]
+    │   │   │   │   └── Descriptors : ao       (read) = [.../char4/desc0, .../char4/desc1]
+    │   │   │   ├── Methods:
+    │   │   │   │   ├── ReadValue(a{sv} options) → ay
+    │   │   │   │   ├── StartNotify() → void
+    │   │   │   │   └── StopNotify() → void
+    │   │   │   └── Signals:
+    │   │   │       └── (via org.freedesktop.DBus.Properties.PropertiesChanged)
+    │   │   │
+    │   │   ├── /io/unikey/Bluetooth/service0/char4/desc0 (Report Reference)
+    │   │   │   │
+    │   │   │   └── Interface: org.bluez.GattDescriptor1
+    │   │   │       ├── Properties:
+    │   │   │       │   ├── UUID           : string  (read) = "00002908-0000-1000-8000-00805f9b34fb"
+    │   │   │       │   ├── Characteristic : object  (read) = /io/unikey/Bluetooth/service0/char4
+    │   │   │       │   └── Flags          : as      (read) = ["read"]
+    │   │   │       └── Methods:
+    │   │   │           └── ReadValue(a{sv} options) → ay  (returns [ReportID, 0x01=Input])
+    │   │   │
+    │   │   └── /io/unikey/Bluetooth/service0/char4/desc1 (CCC Descriptor)
+    │   │       │
+    │   │       └── Interface: org.bluez.GattDescriptor1
+    │   │           ├── Properties:
+    │   │           │   ├── UUID           : string  (read) = "00002902-0000-1000-8000-00805f9b34fb"
+    │   │           │   ├── Characteristic : object  (read) = /io/unikey/Bluetooth/service0/char4
+    │   │           │   └── Flags          : as      (read) = ["read", "write"]
+    │   │           └── Methods:
+    │   │               ├── ReadValue(a{sv} options) → ay   (returns [0x00, 0x00] or [0x01, 0x00])
+    │   │               └── WriteValue(ay value, a{sv} options) → void
+    │   │
+    │   └── /io/unikey/Bluetooth/service0/char5 (Output Report - UUID: 0x2A4D)
+    │       │
+    │       ├── Interface: org.bluez.GattCharacteristic1
+    │       │   ├── Properties:
+    │       │   │   ├── UUID        : string   (read) = "00002a4d-0000-1000-8000-00805f9b34fb"
+    │       │   │   ├── Service     : object   (read) = /io/unikey/Bluetooth/service0
+    │       │   │   ├── Flags       : as       (read) = ["read", "write", "write-without-response"]
+    │       │   │   └── Descriptors : ao       (read) = [.../char5/desc0]
+    │       │   └── Methods:
+    │       │       ├── ReadValue(a{sv} options) → ay
+    │       │       └── WriteValue(ay value, a{sv} options) → void  (LED status from host)
+    │       │
+    │       └── /io/unikey/Bluetooth/service0/char5/desc0 (Report Reference)
+    │           │
+    │           └── Interface: org.bluez.GattDescriptor1
+    │               ├── Properties:
+    │               │   ├── UUID           : string  (read) = "00002908-0000-1000-8000-00805f9b34fb"
+    │               │   ├── Characteristic : object  (read) = /io/unikey/Bluetooth/service0/char5
+    │               │   └── Flags          : as      (read) = ["read"]
+    │               └── Methods:
+    │                   └── ReadValue(a{sv} options) → ay  (returns [ReportID, 0x02=Output])
+    │
+    ├── /io/unikey/Bluetooth/service1 (Battery Service - UUID: 0x180F)
+    │   │
+    │   ├── Interface: org.bluez.GattService1
+    │   │   └── Properties:
+    │   │       ├── UUID     : string   (read) = "0000180f-0000-1000-8000-00805f9b34fb"
+    │   │       └── Primary  : boolean  (read) = true
+    │   │
+    │   └── /io/unikey/Bluetooth/service1/char0 (Battery Level - UUID: 0x2A19)
+    │       │
+    │       ├── Interface: org.bluez.GattCharacteristic1
+    │       │   ├── Properties:
+    │       │   │   ├── UUID        : string  (read) = "00002a19-0000-1000-8000-00805f9b34fb"
+    │       │   │   ├── Service     : object  (read) = /io/unikey/Bluetooth/service1
+    │       │   │   ├── Flags       : as      (read) = ["read", "notify"]
+    │       │   │   └── Descriptors : ao      (read) = [.../char0/desc0]
+    │       │   ├── Methods:
+    │       │   │   ├── ReadValue(a{sv} options) → ay  (returns [0-100])
+    │       │   │   ├── StartNotify() → void
+    │       │   │   └── StopNotify() → void
+    │       │   └── Signals:
+    │       │       └── (via PropertiesChanged)
+    │       │
+    │       └── /io/unikey/Bluetooth/service1/char0/desc0 (CCC Descriptor)
+    │           │
+    │           └── Interface: org.bluez.GattDescriptor1
+    │               └── (same structure as other CCC descriptors)
+    │
+    ├── /io/unikey/Bluetooth/service2 (Device Information - UUID: 0x180A)
+    │   │
+    │   ├── Interface: org.bluez.GattService1
+    │   │   └── Properties:
+    │   │       ├── UUID     : string   (read) = "0000180a-0000-1000-8000-00805f9b34fb"
+    │   │       └── Primary  : boolean  (read) = true
+    │   │
+    │   ├── /io/unikey/Bluetooth/service2/char0 (Manufacturer Name - UUID: 0x2A29)
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       ├── Properties:
+    │   │       │   ├── UUID    : string  = "00002a29-0000-1000-8000-00805f9b34fb"
+    │   │       │   ├── Service : object  = /io/unikey/Bluetooth/service2
+    │   │       │   └── Flags   : as      = ["read"]
+    │   │       └── Methods:
+    │   │           └── ReadValue(a{sv}) → ay  (UTF-8 string as bytes)
+    │   │
+    │   ├── /io/unikey/Bluetooth/service2/char1 (Model Number - UUID: 0x2A24)
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       └── (same pattern - Flags: ["read"])
+    │   │
+    │   ├── /io/unikey/Bluetooth/service2/char2 (Serial Number - UUID: 0x2A25)
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       └── (same pattern - Flags: ["read"])
+    │   │
+    │   ├── /io/unikey/Bluetooth/service2/char3 (Firmware Revision - UUID: 0x2A26)
+    │   │   └── Interface: org.bluez.GattCharacteristic1
+    │   │       └── (same pattern - Flags: ["read"])
+    │   │
+    │   └── /io/unikey/Bluetooth/service2/char4 (PnP ID - UUID: 0x2A50)
+    │       └── Interface: org.bluez.GattCharacteristic1
+    │           ├── Properties:
+    │           │   └── Flags : as = ["read"]
+    │           └── Methods:
+    │               └── ReadValue(a{sv}) → ay  (7 bytes: VendorIDSource, VendorID, ProductID, Version)
+    │
+    └── /io/unikey/Bluetooth/agent (Pairing Agent)
+        │
+        └── Interface: org.bluez.Agent1
+            └── Methods:
+                ├── Release() → void
+                ├── RequestPinCode(o device) → s
+                ├── DisplayPinCode(o device, s pincode) → void
+                ├── RequestPasskey(o device) → u
+                ├── DisplayPasskey(o device, u passkey, q entered) → void
+                ├── RequestConfirmation(o device, u passkey) → void
+                ├── RequestAuthorization(o device) → void
+                ├── AuthorizeService(o device, s uuid) → void
+                └── Cancel() → void
