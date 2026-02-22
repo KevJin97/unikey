@@ -68,8 +68,12 @@ void register_bluetooth_dbus_cmds()
 {
 	unikey_bluetooth_dbus_obj = sdbus::createObject(*unikey_dbus_connection, "/io/unikey/Bluetooth");
 	
-	unikey_bluetooth_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
-		"EnableBluetooth", "", "", &dbus_enable_unikey_bluetooth);
+	//unikey_wifi_dbus_obj->registerMethod("io.unikey.Bluetooth.Methods",
+	//	"SetDisplayName", "s", "", &dbus_set_bluetooth_name);
+
+	unikey_bluetooth_dbus_obj->registerMethod("EnableBluetooth")
+		.onInterface("io.unikey.Bluetooth.Methods")
+			.implementedAs(&dbus_enable_unikey_bluetooth);
 
 	unikey_bluetooth_dbus_obj->registerMethod("DisableBluetooth")
 		.onInterface("io.unikey.Bluetooth.Methods")
