@@ -6,9 +6,11 @@
 #include <sdbus-c++/IObject.h>
 #include <sdbus-c++/Message.h>
 
+extern void register_bluetooth_dbus_cmds();
 extern void dbus_set_bluetooth_name(sdbus::MethodCall call);
 extern void dbus_enable_unikey_bluetooth();
 extern void dbus_disable_unikey_bluetooth();
+extern void dbus_toggle_unikey_bluetooth();
 
 // class BlueZ_Proxy :
 // 	public org::bluez::Adapter1_proxy,
