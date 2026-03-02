@@ -459,7 +459,21 @@ void Device::input_monitor_process()
 							break;
 
 						case EV_ABS:
-							// ++*p_event_count;
+							if (event_queue[*p_event_count].code == ABS_MT_TRACKING_ID)
+							{
+								if (event_queue[*p_event_count].value != -1)
+								{
+									Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
+									++key_press_cnt;
+								}
+								else
+								{
+									Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
+									--key_press_cnt;
+								}
+							}
+							++*p_event_count;
+							break;
 
 						default:
 							break;
@@ -535,6 +549,32 @@ BitField Device::return_enabled_local_rel_states() const
 		}
 	}
 	return enabled_codes;
+}
+
+BitField Device::return_enabled_local_properties() const
+{
+	BitField enabled_properties(INPUT_PROP_CNT);
+	for (unsigned prop = 0; prop < INPUT_PROP_CNT; ++prop)
+	{
+		if (libevdev_has_property(this->dev, prop))
+		{
+			enabled_properties.insert(prop);
+		}
+	}
+	return enabled_properties;
+}
+
+std::vector<std::pair<unsigned, struct input_absinfo>> Device::return_enabled_local_absinfo() const
+{
+	std::vector<std::pair<unsigned, struct input_absinfo>> absinfo_list;
+	for (unsigned code = 0; code < ABS_CNT; ++code)
+	{
+		if (libevdev_has_event_code(this->dev, EV_ABS, code))
+		{
+			absinfo_list.emplace_back(std::pair<unsigned, struct input_absinfo>(code, *libevdev_get_abs_info(this->dev, code)));
+		}
+	}
+	return absinfo_list;
 }
 
 BitField Device::return_enabled_global_key_states()

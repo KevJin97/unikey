@@ -23,12 +23,12 @@
 
 class Device
 {
-	// STATIC MEMBER DATA
+	// STATIC PRIVATE INTERFACE
 		static void default_event_processor(const void* data, uint64_t unit_size=sizeof(struct input_event));
 		static void watchdog_process();
 		static void hotplug_detect();
 	
-	// STATIC PRIVATE INTERFACE
+	// STATIC MEMBER DATA
 		static inline void (*event_process)(const void*, const uint64_t) = Device::default_event_processor;
 		static inline std::atomic_int8_t global_key_state[KEY_CNT] = { 0 };
 		static inline unsigned timeout_length = 30000;
@@ -81,6 +81,8 @@ class Device
 	// PUBLIC INTERFACE
 		BitField return_enabled_local_key_states() const;
 		BitField return_enabled_local_rel_states() const;
+		BitField return_enabled_local_properties() const;
+		std::vector<std::pair<unsigned, struct input_absinfo>> return_enabled_local_absinfo() const;
 	
 	// OPERATOR OVERLOAD
 		Device& operator= (const Device&) = delete;	// Delete copy operator
