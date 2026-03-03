@@ -86,7 +86,7 @@ struct __attribute__((packed)) hid_mouse_report
     int16_t x{0};
 	int16_t y{0};
     int8_t wheel{0};
-    int8_t ac_pan{0};
+    int8_t hwheel{0};
 };
 
 struct __attribute__((packed)) hid_keyboard_report
