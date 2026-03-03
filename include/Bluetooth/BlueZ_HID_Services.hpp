@@ -1,11 +1,11 @@
 #ifndef BLUEZ_HID_SERVICES_HPP
 #define BLUEZ_HID_SERVICES_HPP
 
+#include "Bluetooth/bluetooth_configs.hpp"
 #include "Bluetooth/Gatt/Base_App_Obj.hpp"
 #include "Bluetooth/Gatt/Characteristic.hpp"
 #include "Bluetooth/Gatt/Descriptor.hpp"
 #include "Bluetooth/Gatt/Service.hpp"
-#include "bluetooth_configs.hpp"
 
 #include <iostream>
 #include <string>
@@ -113,9 +113,13 @@ class ReportChar : public Characteristic
 		ByteArray values = { 0, 0 };
 	
 	public:
-		ReportChar(uint8_t id) : Characteristic("2a4d", { "secure-read", "notify" })
+		ReportChar(uint8_t id, bool has_output=false) : Characteristic("2a4d", { "secure-read", "notify" })
 		{
-			this->add_subelement(new RefDesc({ id, 0x01 }));
+			this->add_subelement(new RefDesc({ id, 0x01 }));	// Input
+			if (has_output)
+			{
+				this->add_subelement(new RefDesc({ id, 0x02 }));	// Output
+			}
 		}
 
 		ByteArray on_read_value(OptionsMap) const override
@@ -136,9 +140,10 @@ class HIDService : public Service
 		{
 			this->add_subelement(new HIDChar("2a4e", ByteArray{ 1 }, { "read", "write-without-response" }));
 			this->add_subelement(new HIDChar("2a4a", ByteArray{ 1, 1, 0, 2 }, { "read" }));
-			this->add_subelement(new HIDChar("2a4b", corsair_hid_report, { "read" }));	// This takes the HID report descriptor
+			this->add_subelement(new HIDChar("2a4b", corsair_hid_report_desc, { "read" }));	// This takes the HID report descriptor
 			this->add_subelement(new ReportChar(1));
-			this->add_subelement(new ReportChar(2));
+			this->add_subelement(new ReportChar(2, true));
+			this->add_subelement(new ReportChar(3));
 		}
 };
 

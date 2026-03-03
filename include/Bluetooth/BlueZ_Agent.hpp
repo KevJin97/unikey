@@ -9,8 +9,10 @@
 class BlueZ_Agent : public sdbus::AdaptorInterfaces<org::bluez::Agent1_adaptor>
 {
 	private:
+	// MEMBER DATA
 		std::string capability;
 
+	// PRIVATE INTERFACE
 		void Release() override;
     	std::string RequestPinCode(const sdbus::ObjectPath& arg0) override;
     	void DisplayPinCode(const sdbus::ObjectPath& arg0, const std::string& arg1) override;
@@ -22,9 +24,13 @@ class BlueZ_Agent : public sdbus::AdaptorInterfaces<org::bluez::Agent1_adaptor>
     	void Cancel() override;
 	
 	public:
+	// PUBLIC CONSTRUCTOR(S)
 		BlueZ_Agent(sdbus::IConnection& connection, const std::string& path, const std::string& capability="NoInputNoOutput");
+		
+	// DESTRUCTOR
 		~BlueZ_Agent();
 
+	// PUBLIC INTERFACE
 		const std::string& get_path() const;
 		const std::string& get_capability() const;
 };
