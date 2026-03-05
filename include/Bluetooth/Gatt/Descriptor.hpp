@@ -17,6 +17,7 @@ class Descriptor : public Base_App_Obj
 		virtual ~Descriptor() = default;
 
 		virtual ByteArray on_read_value(OptionsMap options) const;
+		virtual void on_write_value(ByteArray bytes, OptionsMap) {};
 };
 
 #endif	// GATT_DESCRIPTOR_HPP

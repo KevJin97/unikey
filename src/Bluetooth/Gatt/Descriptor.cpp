@@ -27,6 +27,10 @@ void Descriptor::register_object()
 		.onInterface("org.bluez.GattDescriptor1")
 			.implementedAs([this](OptionsMap options){ return this->on_read_value(options); });
 	
+	this->dbus_object->registerMethod("WriteValue")
+		.onInterface("org.bluez.GattDescriptor1")
+			.implementedAs([this](ByteArray bytes, OptionsMap options){ this->on_write_value(bytes, options); });
+	
 	this->dbus_object->finishRegistration();
 }
 
