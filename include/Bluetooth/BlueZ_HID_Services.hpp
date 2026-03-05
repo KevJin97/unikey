@@ -107,14 +107,34 @@ class RefDesc : public Descriptor
 		}
 };
 
+class CCCDesc : public Descriptor
+{
+	private:
+		ByteArray values = { 0, 0 };
+
+	public:
+		CCCDesc() : Descriptor("2902", { "read", "write" }){}
+
+		ByteArray on_read_value(OptionsMap) const override
+		{
+			return this->values;
+		}
+
+		void on_write_value(ByteArray new_values, OptionsMap) override
+		{
+			this->values = new_values;
+		}
+};
+
 class ReportChar : public Characteristic
 {
 	private:
 		ByteArray values = { 0, 0 };
 	
 	public:
-		ReportChar(uint8_t id, bool has_output=false) : Characteristic("2a4d", { "secure-read", "notify" })
+		ReportChar(uint8_t id, bool has_output=false) : Characteristic("2a4d", { "read", "notify" })
 		{
+			this->add_subelement(new CCCDesc);
 			this->add_subelement(new RefDesc({ id, 0x01 }));	// Input
 			if (has_output)
 			{
@@ -139,7 +159,7 @@ class HIDService : public Service
 		HIDService() : Service("1812", true)
 		{
 			this->add_subelement(new HIDChar("2a4e", ByteArray{ 1 }, { "read", "write-without-response" }));
-			this->add_subelement(new HIDChar("2a4a", ByteArray{ 1, 1, 0, 2 }, { "read" }));
+			this->add_subelement(new HIDChar("2a4a", ByteArray{ 0x11, 0x01, 0x00, 0x02 }, { "read" }));
 			this->add_subelement(new HIDChar("2a4b", corsair_hid_report_desc, { "read" }));	// This takes the HID report descriptor
 			this->add_subelement(new ReportChar(1));
 			this->add_subelement(new ReportChar(2, true));
