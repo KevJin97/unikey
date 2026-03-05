@@ -82,7 +82,7 @@ void BlueZ_Interface::create_advertisement()
 			.withGetter(
 				[]()
 				{
-					return uint16_t(0x03c1);
+					return uint16_t(0x03c3);
 				}
 			);
 
@@ -441,6 +441,11 @@ bool BlueZ_Interface::enable()
 		this->register_advertisement();
 		this->monitor_connection();
 
+		if (this->new_connection != nullptr)
+		{
+			this->dbus_connection->enterEventLoopAsync();
+		}
+
 		std::cout << "BlueZ interface has been enabled" << std::endl;
 		return true;
 	}
@@ -483,7 +488,12 @@ void BlueZ_Interface::disable()
 		this->gatt_app = nullptr;
 	}
 
-	this->new_connection.reset();
+	if (this->new_connection != nullptr)
+	{
+		this->dbus_connection->leaveEventLoop();
+		this->new_connection.reset();
+	}
+	
 	this->dbus_connection = nullptr;
 	this->connected_to_host.store(false, std::memory_order_release);
 	this->advertising.store(false, std::memory_order_release);
@@ -525,5 +535,5 @@ void BlueZ_Interface::send_hid_report(uint8_t report_id, const std::vector<uint8
 
 	//PropertiesMap changed;
 	//changed["Value"] = sdbus::Variant(report);
-	target->emit_properties_changed("org.bluez.GattCharacteristic1", { std::pair<std::string, sdbus::Variant>("Value", report) });
+	target->update_value(report);
 }
