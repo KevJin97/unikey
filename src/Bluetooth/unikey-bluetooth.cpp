@@ -145,7 +145,7 @@ void dbus_toggle_unikey_bluetooth()
 
 	if (unikey_bluetooth == nullptr)
 	{
-		unikey_bluetooth = new BlueZ_Interface("Unikey HID", unikey_dbus_connection, "io.unikey");
+		unikey_bluetooth = new BlueZ_Interface("Unikey HID", nullptr, "io.unikey.bluetooth");
 		if (unikey_bluetooth->enable())
 		{
 			if (Device::return_grab_state())
