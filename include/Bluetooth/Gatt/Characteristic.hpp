@@ -3,7 +3,6 @@
 
 #include "Base_App_Obj.hpp"
 
-#include <map>
 #include <vector>
 
 #include <sdbus-c++/IObject.h>
@@ -25,7 +24,7 @@ class Characteristic : public Base_App_Obj
 		virtual void on_start_notify() const;
 		virtual void on_stop_notify() const;
 
-		void emit_properties_changed(const std::string& interface, const std::map<std::string, sdbus::Variant>& changed);
+		virtual void update_value(const ByteArray& new_value);
 };
 
 #endif	// GATT_CHARACTERISTIC_HPP

@@ -34,6 +34,11 @@ void Characteristic::register_object()
 				}
 			);
 
+	this->dbus_object->registerProperty("Value")
+		.onInterface("org.bluez.GattCharacteristic1")
+			.withGetter([this](){ return this->on_read_value({}); })
+			.withSetter([this](const ByteArray& val){ this->on_write_value(val, {}); });
+
 	this->dbus_object->registerMethod("ReadValue")
 		.onInterface("org.bluez.GattCharacteristic1")
 			.implementedAs([this](OptionsMap options){ return this->on_read_value(options); });
@@ -58,16 +63,6 @@ Characteristic::Characteristic(const std::string& uuid, const std::vector<std::s
 	this->flags = flags;
 }
 
-void Characteristic::emit_properties_changed(const std::string& interface, const std::map<std::string, sdbus::Variant>& changed)
-{
-	if (this->dbus_object)
-	{
-		this->dbus_object->emitSignal("PropertiesChanged")
-			.onInterface("org.freedesktop.DBus.Properties")
-				.withArguments(interface, changed, std::vector<std::string>{});
-	}
-}
-
 ByteArray Characteristic::on_read_value(OptionsMap options) const
 {
 	throw sdbus::Error("org.bluez.Error.NotSupported", "Not supported");
@@ -86,4 +81,10 @@ void Characteristic::on_start_notify() const
 void Characteristic::on_stop_notify() const
 {
 
+}
+
+void Characteristic::update_value(const ByteArray& new_value)
+{
+	this->on_write_value(new_value, {});
+	this->dbus_object->emitPropertiesChangedSignal("org.bluez.GattCharacteristic1", { "Value" });
 }
