@@ -2,6 +2,8 @@
 #include "Bluetooth/BlueZ_HID_Services.hpp"
 #include "Bluetooth/Gatt/Application.hpp"
 #include "Bluetooth/Gatt/Base_App_Obj.hpp"
+#include "Bluetooth/Gatt/Characteristic.hpp"
+#include "Bluetooth/Gatt/Descriptor.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -50,6 +52,7 @@ void BlueZ_Interface::create_advertisement()
 	std::string ad_path = this->gatt_app->get_full_path() + "/advertisement0";
 	this->ad_object = sdbus::createObject(*this->dbus_connection, ad_path);
 
+	// "peripheral" — we are the GATT server, not a central/scanner.
 	this->ad_object->registerProperty("Type")
 		.onInterface("org.bluez.LEAdvertisement1")
 			.withGetter(
@@ -58,7 +61,9 @@ void BlueZ_Interface::create_advertisement()
 					return std::string("peripheral");
 				}
 			);
-	
+
+	// Advertise all three service UUIDs so the connecting device knows
+	// exactly which profiles to expect before it connects.
 	this->ad_object->registerProperty("ServiceUUIDs")
 		.onInterface("org.bluez.LEAdvertisement1")
 			.withGetter(
@@ -76,24 +81,13 @@ void BlueZ_Interface::create_advertisement()
 					return this->device_name;
 				}
 			);
-	
-	this->ad_object->registerProperty("Appearance")
-		.onInterface("org.bluez.LEAdvertisement1")
-			.withGetter(
-				[]()
-				{
-					return uint16_t(0x03c3);
-				}
-			);
 
-	this->ad_object->registerProperty("Discoverable")
-		.onInterface("org.bluez.LEAdvertisement1")
-			.withGetter(
-				[]()
-				{
-					return true;
-				}
-			);
+	// NOTE: Do NOT register Appearance or Discoverable as LEAdvertisement1
+	// properties. BlueZ validates the full object schema when
+	// RegisterAdvertisement is called and rejects with InvalidArguments if
+	// it encounters any property it does not recognise on that interface.
+	// Appearance is set on the adapter directly (via Alias workaround) and
+	// Discoverable is set on the adapter via bluez_proxy->Discoverable(true).
 
 	this->ad_object->registerProperty("Includes")
 		.onInterface("org.bluez.LEAdvertisement1")
@@ -268,12 +262,69 @@ void BlueZ_Interface::unregister_agent()
 	this->agent.reset();
 }
 
+void BlueZ_Interface::subscribe_to_device(const std::string& obj_path)
+{
+	// Create a persistent proxy for this device path so we can subscribe
+	// to its PropertiesChanged signal. This proxy MUST be stored in the
+	// device_proxies member — a local unique_ptr would be destroyed when
+	// this function returns, killing the subscription immediately and
+	// meaning Connected changes would never be received.
+	auto device_proxy = sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path);
+
+	device_proxy->uponSignal("PropertiesChanged")
+		.onInterface("org.freedesktop.DBus.Properties")
+			.call(
+				[this, obj_path](const std::string& interface, const std::map<std::string, sdbus::Variant>& changed, const std::vector<std::string>&)
+				{
+					if (interface != "org.bluez.Device1" || !changed.contains("Connected"))
+					{
+						return;
+					}
+
+					bool connected = changed.at("Connected").get<bool>();
+					this->connected_to_host.store(connected, std::memory_order_release);
+					this->connected_to_host.notify_all();
+
+					if (connected)
+					{
+						std::cout << "BLE device connected: " << obj_path << std::endl;
+
+						try
+						{
+							// Mark as trusted so the device can reconnect without
+							// going through the full pairing flow again.
+							sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path)
+								->setProperty("Trusted")
+									.onInterface("org.bluez.Device1")
+										.toValue(true);
+						}
+						catch (const sdbus::Error& e)
+						{
+							std::cerr << "Failed to set device as trusted: " << e.getMessage() << std::endl;
+						}
+					}
+					else
+					{
+						std::cout << "BLE device disconnected: " << obj_path << std::endl;
+					}
+				}
+			);
+
+	device_proxy->finishRegistration();
+	this->device_proxies.push_back(std::move(device_proxy));
+}
+
 void BlueZ_Interface::monitor_connection()
 {
 	if (!this->bluez_proxy) return;
 
-	std::unique_ptr<sdbus::IProxy> watcher = sdbus::createProxy(*this->dbus_connection, "org.bluez", "/");
-	watcher->registerSignalHandler("org.freedesktop.DBus.ObjectManager", "InterfacesAdded", 
+	// --- Part 1: Subscribe to future device connections via InterfacesAdded ---
+	//
+	// The watcher must be a member. A local unique_ptr would be destroyed when
+	// this function returns, taking the InterfacesAdded handler with it.
+	this->connection_watcher = sdbus::createProxy(*this->dbus_connection, "org.bluez", "/");
+
+	this->connection_watcher->registerSignalHandler("org.freedesktop.DBus.ObjectManager", "InterfacesAdded",
 		[this](sdbus::Signal signal)
 		{
 			sdbus::ObjectPath obj_path;
@@ -282,46 +333,55 @@ void BlueZ_Interface::monitor_connection()
 
 			if (interfaces.contains("org.bluez.Device1"))
 			{
-				std::unique_ptr<sdbus::IProxy> device_proxy = sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path);
-				
-				device_proxy->uponSignal("PropertiesChanged")
-					.onInterface("org.freedesktop.DBus.Properties")
-						.call(
-							[this, obj_path](const std::string& interface, const std::map<std::string, sdbus::Variant>& changed, const std::vector<std::string>&)
-							{
-								if (interface == "org.bluez.Device1" && changed.contains("Connected"))
-								{
-									this->connected_to_host.store(changed.at("Connected").get<bool>(), std::memory_order_release);
-									this->connected_to_host.notify_all();
-
-									if (this->connected_to_host.load(std::memory_order_acquire))
-									{
-										std::cout << "BLE device connected: " << obj_path << std::endl;
-
-										try
-										{
-											// Allow devices to reconnect without re-pairing
-											sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path)->setProperty("Trusted")
-												.onInterface("org.bluez.Device1")
-													.toValue(true);
-										}
-										catch (const sdbus::Error& e)
-										{
-											std::cerr << "Failed to set device as trusted: " << e.getMessage() << std::endl;
-										}
-									}
-									else
-									{
-										std::cout << "BLE device disconnected: " << obj_path << std::endl;
-									}
-								}
-							}
-						);
-				
-				device_proxy->finishRegistration();
+				this->subscribe_to_device(obj_path);
 			}
 		}
 	);
+
+	this->connection_watcher->finishRegistration();
+
+	// --- Part 2: Handle reconnections for already-known devices ---
+	//
+	// When a previously paired device reconnects, BlueZ reuses its existing
+	// device object. InterfacesAdded is therefore never emitted for that
+	// reconnection — only PropertiesChanged fires. We must subscribe to
+	// PropertiesChanged on every existing Device1 object right now so that
+	// reconnections are not missed.
+	//
+	// This is confirmed by the pairing capture: a classic BR/EDR connection
+	// to the same device MAC appears mid-session on handle 0x0100 alongside
+	// the BLE connection on 0x0108, meaning the host has had prior contact
+	// with this device and its object may already exist in BlueZ.
+	try
+	{
+		std::unique_ptr<sdbus::IProxy> om_proxy = sdbus::createProxy(*this->dbus_connection, "org.bluez", "/");
+		ManagedObjectsMap existing_objects;
+		om_proxy->callMethod("GetManagedObjects")
+			.onInterface("org.freedesktop.DBus.ObjectManager")
+				.storeResultsTo(existing_objects);
+
+		for (const auto& [path, interfaces] : existing_objects)
+		{
+			if (interfaces.contains("org.bluez.Device1"))
+			{
+				this->subscribe_to_device(path);
+
+				// If the device is already connected right now (e.g. we are
+				// restarting the daemon mid-session), reflect that immediately.
+				const auto& dev_props = interfaces.at("org.bluez.Device1");
+				if (dev_props.contains("Connected") && dev_props.at("Connected").get<bool>())
+				{
+					std::cout << "Device already connected on startup: " << path << std::endl;
+					this->connected_to_host.store(true, std::memory_order_release);
+					this->connected_to_host.notify_all();
+				}
+			}
+		}
+	}
+	catch (const sdbus::Error& e)
+	{
+		std::cerr << "Warning: Could not enumerate existing BlueZ devices: " << e.getMessage() << std::endl;
+	}
 }
 
 BlueZ_Interface::BlueZ_Interface(sdbus::IConnection* dbus_connection, const std::string& connection_name)
@@ -419,10 +479,23 @@ bool BlueZ_Interface::enable()
 			this->orig_powered_state = this->bluez_proxy->Powered();
 			this->orig_discover_state = this->bluez_proxy->Discoverable();
 			this->orig_pairable_state = this->bluez_proxy->Pairable();
+			this->orig_alias = this->bluez_proxy->Alias();
+			this->orig_discoverable_timeout = this->bluez_proxy->DiscoverableTimeout();
 
 			this->bluez_proxy->Powered(true);
 			this->bluez_proxy->Discoverable(true);
 			this->bluez_proxy->Pairable(true);
+
+			// Keep discoverable indefinitely for the session lifetime so the
+			// remote device always has an LE path to follow on reconnect.
+			this->bluez_proxy->DiscoverableTimeout(0);
+
+			// Align the BR/EDR adapter name with our LE advertisement name.
+			// Without this, BR/EDR inquiries report the system hostname, which
+			// can cause the connecting device to associate our adapter with its
+			// cached system audio profile instead of treating it as a new HID
+			// peripheral.
+			this->bluez_proxy->Alias(this->device_name);
 		}
 		catch (const sdbus::Error& e)
 		{
@@ -470,15 +543,30 @@ void BlueZ_Interface::wait_until_connected()
 
 void BlueZ_Interface::disable()
 {
-	// Set configurations back to original values
-	this->bluez_proxy->Powered(this->orig_powered_state);
-	this->bluez_proxy->Discoverable(this->orig_discover_state);
-	this->bluez_proxy->Pairable(this->orig_pairable_state);
+	// Guard against being called when enable() never fully succeeded
+	// (e.g. no adapter found). The proxy may legitimately be null here.
+	if (this->bluez_proxy)
+	{
+		try
+		{
+			this->bluez_proxy->Powered(this->orig_powered_state);
+			this->bluez_proxy->Discoverable(this->orig_discover_state);
+			this->bluez_proxy->Pairable(this->orig_pairable_state);
+			this->bluez_proxy->DiscoverableTimeout(this->orig_discoverable_timeout);
+			this->bluez_proxy->Alias(this->orig_alias);
+		}
+		catch (const sdbus::Error& e)
+		{
+			std::cerr << "Warning: Could not restore adapter properties: " << e.getMessage() << std::endl;
+		}
+	}
 
 	this->unregister_advertisement();
 	this->unregister_gatt_application();
 	this->unregister_agent();
 
+	this->connection_watcher.reset();
+	this->device_proxies.clear();
 	this->ad_object.reset();
 	this->bluez_proxy.reset();
 
@@ -520,20 +608,40 @@ void BlueZ_Interface::send_hid_report(uint8_t report_id, const std::vector<uint8
 		return;
 	}
 
-	Characteristic* target = nullptr;
-
-	if (this->gatt_app->get_subelement(0) != nullptr)
+	// HID service is always subelement 0 of the GATT application.
+	const Base_App_Obj* hid_service = this->gatt_app->get_subelement(0);
+	if (hid_service == nullptr)
 	{
-		target = (Characteristic*)this->gatt_app->get_subelement(0)->get_subelement(report_id + 2);
+		std::cerr << "HID service not found" << std::endl;
+		return;
+	}
+
+	// Scan the HID service's characteristics for an Input Report (UUID 0x2A4D)
+	// whose desc0 (Report Reference) matches [report_id, 0x01=Input].
+	// This is robust to any reordering of characteristics in HIDService.
+	Characteristic* target = nullptr;
+	for (std::size_t i = 0; ; ++i)
+	{
+		const Base_App_Obj* child = hid_service->get_subelement(i);
+		if (child == nullptr) break;
+		if (child->get_uuid() != "2a4d") continue;
+
+		const Base_App_Obj* desc0 = child->get_subelement(0);
+		if (desc0 == nullptr) continue;
+
+		ByteArray ref = ((Descriptor*)desc0)->on_read_value({});
+		if (ref.size() >= 2 && ref[0] == report_id && ref[1] == 0x01)
+		{
+			target = (Characteristic*)child;
+			break;
+		}
 	}
 
 	if (target == nullptr)
 	{
-		std::cerr << "No report characteristic found for report ID " << (int)report_id << std::endl;
+		std::cerr << "No input report characteristic found for report ID " << (int)report_id << std::endl;
 		return;
 	}
 
-	//PropertiesMap changed;
-	//changed["Value"] = sdbus::Variant(report);
 	target->update_value(report);
 }

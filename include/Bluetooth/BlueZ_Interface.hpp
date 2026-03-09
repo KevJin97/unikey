@@ -7,6 +7,7 @@
 #include "Bluetooth/org_bluez_proxy.hpp"
 
 #include <memory>
+#include <vector>
 
 #include <sdbus-c++/IConnection.h>
 #include <sdbus-c++/IObject.h>
@@ -70,8 +71,12 @@ class BlueZ_Interface
 		bool orig_powered_state = false;
 		bool orig_discover_state = false;
 		bool orig_pairable_state = false;
+		std::string orig_alias;
+		uint32_t orig_discoverable_timeout = 0;
 		std::unique_ptr<sdbus::IObject> ad_object;
 		std::unique_ptr<BlueZ_Agent> agent;
+		std::unique_ptr<sdbus::IProxy> connection_watcher;
+		std::vector<std::unique_ptr<sdbus::IProxy>> device_proxies;
 		std::atomic_bool connected_to_host = false;
 		std::atomic_bool advertising = false;
 		std::atomic_bool registered = false;
@@ -86,6 +91,7 @@ class BlueZ_Interface
 		void unregister_gatt_application();
 		void unregister_agent();
 		void monitor_connection();
+		void subscribe_to_device(const std::string& obj_path);
 
 	public:
 	// PUBLIC CONSTRUCTOR(S)
