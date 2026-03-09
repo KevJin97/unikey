@@ -116,7 +116,13 @@ void dbus_enable_unikey_bluetooth()
 								case REL_HWHEEL:
 									mouse.hwheel = events[n].value;
 									break;
+								
+								default:
+									break;
 							}
+							break;
+
+						default:
 							break;
 					}
 				}
@@ -203,7 +209,13 @@ void dbus_toggle_unikey_bluetooth()
 									case REL_HWHEEL:
 										mouse.hwheel = events[n].value;
 										break;
+									
+									default:
+										break;
 								}
+								break;
+							
+							default:
 								break;
 						}
 					}

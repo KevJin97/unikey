@@ -131,6 +131,7 @@ bool Device::trigger_activation()
 
 	uint64_t message = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
+	Device::pending_reads.store(message, std::memory_order_acq_rel);
 
 	Device::is_grabbed.notify_all();
 	return !prev_state;
@@ -500,12 +501,32 @@ void Device::input_monitor_process()
 					goto CLEAN_UP_THREAD;	// Break out of loop to deactivate device
 			}
 		}
-		else if ((Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed) && key_press_cnt == 0)	// Toggling local grab state (only grabs if no inputs are being received)
+		else if (Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed)	// Toggling local grab state (only grabs if no inputs are being received)
 		{
-			this->device_is_grabbed = !this->device_is_grabbed;
-			libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
 			uint64_t msg = 0;
-			read(pfd[1].fd, &msg, sizeof(uint64_t));
+
+			if (key_press_cnt == 0)
+			{
+				this->device_is_grabbed = !this->device_is_grabbed;
+				libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
+				read(pfd[1].fd, &msg, sizeof(uint64_t));
+			}
+			else if (Device::pending_reads.load(std::memory_order_acquire) != 0)
+			{
+				read(pfd[1].fd, &msg, sizeof(uint64_t));
+			}
+			else if (poll(pfd, 2, -1) < 0)
+			{
+				std::cerr << "Input polling failed: " << strerror(errno) << std::endl;
+				break;
+			}
+			else
+			{
+				continue;
+			}
+
+			msg = Device::pending_reads.fetch_sub(msg, std::memory_order_acq_rel);
+			(msg > 1) ? Device::pending_reads.wait(msg) : Device::pending_reads.notify_all();
 		}
 		else if (poll(pfd, 2, -1) < 0)	// Handle polling error
 		{

@@ -42,6 +42,7 @@ class Device
 		static inline std::atomic_uint32_t active_devices{0};
 		static inline std::atomic_uint32_t pending_events{0};
 		static inline std::atomic_uint32_t global_key_press_cnt{0};
+		static inline std::atomic_uint64_t pending_reads{0};
 		static inline std::atomic_bool is_grabbed{false};
 		static inline std::atomic_bool is_exit{false};
 

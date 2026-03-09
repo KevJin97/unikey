@@ -110,7 +110,7 @@ class RefDesc : public Descriptor
 class CCCDesc : public Descriptor
 {
 	private:
-		ByteArray values = { 0, 0 };
+		ByteArray values = { 0x00, 0x00 };
 
 	public:
 		CCCDesc() : Descriptor("2902", { "read", "write" }){}
