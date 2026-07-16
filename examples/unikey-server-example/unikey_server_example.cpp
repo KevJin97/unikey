@@ -6,8 +6,8 @@
 #include <linux/input.h>
 
 #include "unikey.hpp"
-#include "Virtual_Device.hpp"
-#include "WiFi_Server.hpp"
+#include "WiFi/Virtual_Device.hpp"
+#include "WiFi/WiFi_Server.hpp"
 
 #define EVER ;;
 

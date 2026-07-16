@@ -1,5 +1,5 @@
-#include "Device.hpp"
-#include "BitField.hpp"
+#include "Core/Device.hpp"
+#include "Core/BitField.hpp"
 
 #include "libevdev/libevdev.h"
 #include "libudev.h"
@@ -20,6 +20,11 @@
 #include <linux/input.h>
 #include <sys/types.h>
 #include <sys/poll.h>
+
+void Device::set_event_processor()
+{
+	Device::set_event_processor(Device::default_event_processor);
+}
 
 void Device::set_event_processor(void (*event_processing_function)(const void*, uint64_t))
 {
@@ -126,6 +131,7 @@ bool Device::trigger_activation()
 
 	uint64_t message = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
+	Device::pending_reads.store(message, std::memory_order_acq_rel);
 
 	Device::is_grabbed.notify_all();
 	return !prev_state;
@@ -454,7 +460,21 @@ void Device::input_monitor_process()
 							break;
 
 						case EV_ABS:
-							// ++*p_event_count;
+							if (event_queue[*p_event_count].code == ABS_MT_TRACKING_ID)
+							{
+								if (event_queue[*p_event_count].value != -1)
+								{
+									Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
+									++key_press_cnt;
+								}
+								else
+								{
+									Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
+									--key_press_cnt;
+								}
+							}
+							++*p_event_count;
+							break;
 
 						default:
 							break;
@@ -481,12 +501,32 @@ void Device::input_monitor_process()
 					goto CLEAN_UP_THREAD;	// Break out of loop to deactivate device
 			}
 		}
-		else if ((Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed) && key_press_cnt == 0)	// Toggling local grab state (only grabs if no inputs are being received)
+		else if (Device::is_grabbed.load(std::memory_order_acquire) != this->device_is_grabbed)	// Toggling local grab state (only grabs if no inputs are being received)
 		{
-			this->device_is_grabbed = !this->device_is_grabbed;
-			libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
 			uint64_t msg = 0;
-			read(pfd[1].fd, &msg, sizeof(uint64_t));
+
+			if (key_press_cnt == 0)
+			{
+				this->device_is_grabbed = !this->device_is_grabbed;
+				libevdev_grab(this->dev, grab_state[this->device_is_grabbed]);
+				read(pfd[1].fd, &msg, sizeof(uint64_t));
+			}
+			else if (Device::pending_reads.load(std::memory_order_acquire) != 0)
+			{
+				read(pfd[1].fd, &msg, sizeof(uint64_t));
+			}
+			else if (poll(pfd, 2, -1) < 0)
+			{
+				std::cerr << "Input polling failed: " << strerror(errno) << std::endl;
+				break;
+			}
+			else
+			{
+				continue;
+			}
+
+			msg = Device::pending_reads.fetch_sub(msg, std::memory_order_acq_rel);
+			(msg > 1) ? Device::pending_reads.wait(msg) : Device::pending_reads.notify_all();
 		}
 		else if (poll(pfd, 2, -1) < 0)	// Handle polling error
 		{
@@ -530,6 +570,32 @@ BitField Device::return_enabled_local_rel_states() const
 		}
 	}
 	return enabled_codes;
+}
+
+BitField Device::return_enabled_local_properties() const
+{
+	BitField enabled_properties(INPUT_PROP_CNT);
+	for (unsigned prop = 0; prop < INPUT_PROP_CNT; ++prop)
+	{
+		if (libevdev_has_property(this->dev, prop))
+		{
+			enabled_properties.insert(prop);
+		}
+	}
+	return enabled_properties;
+}
+
+std::vector<std::pair<unsigned, struct input_absinfo>> Device::return_enabled_local_absinfo() const
+{
+	std::vector<std::pair<unsigned, struct input_absinfo>> absinfo_list;
+	for (unsigned code = 0; code < ABS_CNT; ++code)
+	{
+		if (libevdev_has_event_code(this->dev, EV_ABS, code))
+		{
+			absinfo_list.emplace_back(std::pair<unsigned, struct input_absinfo>(code, *libevdev_get_abs_info(this->dev, code)));
+		}
+	}
+	return absinfo_list;
 }
 
 BitField Device::return_enabled_global_key_states()

@@ -1,7 +1,8 @@
+#include "Core/BitField.hpp"
+
 #include <cstdint>
 #include <vector>
 
-#include "BitField.hpp"
 
 BitField BitField::zero()
 {
