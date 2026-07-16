@@ -3,6 +3,7 @@
 #include "Bluetooth/BlueZ_Interface.hpp"
 #include "unikey.hpp"
 
+#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <linux/input-event-codes.h>
@@ -104,13 +105,63 @@ static void process_hid_events(const void* data, uint64_t /*unit_size*/)
 			}
 
 			case EV_REL:
+				int32_t sum = ev.value;
+
 				switch (ev.code)
 				{
-					case REL_X:      s_mouse.x      = ev.value; break;
-					case REL_Y:      s_mouse.y      = ev.value; break;
-					case REL_WHEEL:  s_mouse.wheel  = ev.value; break;
-					case REL_HWHEEL: s_mouse.hwheel = ev.value; break;
+					case REL_X:
+						sum += (int32_t)s_mouse.x;
+						if (sum > INT16_MAX)
+						{
+							sum = INT16_MAX;
+						}
+						else if (sum < INT16_MIN)
+						{
+							sum = INT16_MIN;
+						}
+						s_mouse.x = (int16_t)sum;
+						break;
+
+					case REL_Y:
+						sum += (int32_t)s_mouse.y;
+						if (sum > INT16_MAX)
+						{
+							sum = INT16_MAX;
+						}
+						else if (sum < INT16_MIN)
+						{
+							sum = INT16_MIN;
+						}
+						s_mouse.y = (int16_t)sum;
+						break;
+
+					case REL_WHEEL:
+						sum += (int32_t)s_mouse.wheel;
+						if (sum > INT8_MAX)
+						{
+							sum = INT8_MAX;
+						}
+						else if (sum < INT8_MIN)
+						{
+							sum = INT8_MIN;
+						}
+						s_mouse.wheel = (int16_t)sum;
+						break;
+
+					case REL_HWHEEL:
+						sum += (int32_t)s_mouse.hwheel;
+						if (sum > INT8_MAX)
+						{
+							sum = INT8_MAX;
+						}
+						else if (sum < INT8_MIN)
+						{
+							sum = INT8_MIN;
+						}
+						s_mouse.hwheel = (int16_t)sum;
+						break;
 				}
+
 				mouse_dirty = true;
 				break;
 		}

@@ -92,6 +92,7 @@ class BlueZ_Interface
 		void unregister_agent();
 		void monitor_connection();
 		void subscribe_to_device(const std::string& obj_path);
+		void request_connection_parameters(const std::string& obj_path) const;
 
 	public:
 	// PUBLIC CONSTRUCTOR(S)
