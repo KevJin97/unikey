@@ -8,7 +8,11 @@
 #include "Bluetooth/org_bluez_proxy.hpp"
 
 #include <atomic>
+#include <map>
 #include <memory>
+#include <mutex>
+#include <set>
+#include <string>
 #include <vector>
 
 #include <sdbus-c++/IConnection.h>
@@ -72,16 +76,14 @@ class BlueZ_Interface
 		std::unique_ptr<BlueZ_Adapter_Proxy> bluez_proxy;
 		std::unique_ptr<BlueZ_Agent_Manager_Proxy> bluez_agent_man_proxy;
 		bool orig_powered_state = false;
-		bool orig_discover_state = false;
 		bool orig_pairable_state = false;
 		std::string orig_alias;
-		uint32_t orig_discoverable_timeout = 0;
-		uint16_t adapter_index = 0xFFFF;	// hciN, for the kernel management socket
-		bool restore_bredr = false;			// BR/EDR was on before enable() switched the controller to LE-only
 		std::unique_ptr<sdbus::IObject> ad_object;
 		std::unique_ptr<BlueZ_Agent> agent;
 		std::unique_ptr<sdbus::IProxy> connection_watcher;
-		std::vector<std::unique_ptr<sdbus::IProxy>> device_proxies;
+		std::mutex device_mutex;	// Guards device_proxies and connected_devices
+		std::map<std::string, std::unique_ptr<sdbus::IProxy>> device_proxies;
+		std::set<std::string> connected_devices;
 		std::atomic_bool connected_to_host = false;
 		std::atomic_bool advertising = false;
 		std::atomic_bool registered = false;
@@ -97,9 +99,7 @@ class BlueZ_Interface
 		void unregister_agent();
 		void monitor_connection();
 		void subscribe_to_device(const std::string& obj_path);
-		bool make_controller_le_only();
-		void restore_controller_bredr();
-		bool controller_is_le_only() const;
+		void set_device_connected(const std::string& obj_path, bool connected);
 
 	public:
 	// PUBLIC CONSTRUCTOR(S)
