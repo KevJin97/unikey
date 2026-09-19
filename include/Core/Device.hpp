@@ -5,6 +5,7 @@
 #include "Cyclic_Queue.hpp"
 
 #include <cstdint>
+#include <string>
 #include <unistd.h>
 #include <vector>
 #include <atomic>
@@ -21,12 +22,40 @@
 
 #include <libevdev/libevdev.h>
 
+// Snapshot of an input device's static capabilities, used to generate
+// HID descriptors (e.g. touchpad/touchscreen report maps) for it.
+struct Device_Capabilities
+{
+	unsigned id = 0;			// Same value returned by Device::return_batch_source()
+	std::string name;
+	BitField properties{INPUT_PROP_CNT};
+	BitField key_codes{KEY_CNT};
+	std::vector<std::pair<unsigned, struct input_absinfo>> absinfo;
+};
+
 class Device
 {
+	public:
+	/*
+		Event batch memory layout handed to the event processor:
+		{ uint64_t count, struct input_event[EVENT_BATCH_CAPACITY + 1], uint64_t source_id }
+
+		The extra event slot is scratch space so a full batch can still read
+		(and discard) the next event without overflowing. The source ID trailer
+		sits after the event array so consumers that only read
+		{ count, events[count] } (e.g. the WiFi client) are unaffected.
+	*/
+		static inline constexpr std::size_t EVENT_BATCH_CAPACITY = 128;
+		static inline constexpr std::size_t EVENT_BATCH_SOURCE_OFFSET = sizeof(uint64_t) + sizeof(struct input_event) * (EVENT_BATCH_CAPACITY + 1);
+		static inline constexpr std::size_t EVENT_BATCH_BYTES = EVENT_BATCH_SOURCE_OFFSET + sizeof(uint64_t);
+
+	private:
 	// STATIC PRIVATE INTERFACE
 		static void default_event_processor(const void* data, uint64_t unit_size=sizeof(struct input_event));
 		static void watchdog_process();
 		static void hotplug_detect();
+		static void accept_event(uint64_t* p_event_count);
+		static void set_batch_source(void* data, unsigned id);
 	
 	// STATIC MEMBER DATA
 		static inline void (*event_process)(const void*, const uint64_t) = Device::default_event_processor;
@@ -78,6 +107,8 @@ class Device
 		static bool return_grab_state();
 		static BitField return_enabled_global_key_states();
 		static BitField return_enabled_global_rel_states();
+		static std::vector<Device_Capabilities> return_device_capabilities();
+		static unsigned return_batch_source(const void* data);
 	
 	// PUBLIC INTERFACE
 		BitField return_enabled_local_key_states() const;

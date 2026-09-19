@@ -3,9 +3,11 @@
 
 #include "Bluetooth/Gatt/Application.hpp"
 #include "Bluetooth/BlueZ_Agent.hpp"
+#include "Bluetooth/bluetooth_configs.hpp"
 #include "Bluetooth/org_bluez_agent_manager_proxy.hpp"
 #include "Bluetooth/org_bluez_proxy.hpp"
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -66,6 +68,7 @@ class BlueZ_Interface
 		std::string device_name = "BlueZ Interface";
 		std::string path_name;
 		Application* gatt_app = nullptr;
+		hid::Report_Map hid_report_map;	// Keyboard/mouse/consumer only until set_hid_report_map()
 		std::unique_ptr<BlueZ_Adapter_Proxy> bluez_proxy;
 		std::unique_ptr<BlueZ_Agent_Manager_Proxy> bluez_agent_man_proxy;
 		bool orig_powered_state = false;
@@ -92,7 +95,6 @@ class BlueZ_Interface
 		void unregister_agent();
 		void monitor_connection();
 		void subscribe_to_device(const std::string& obj_path);
-		void request_connection_parameters(const std::string& obj_path) const;
 
 	public:
 	// PUBLIC CONSTRUCTOR(S)
@@ -108,6 +110,7 @@ class BlueZ_Interface
 	// PUBLIC INTERFACE
 		void set_path_name(const std::string& path_name);
 		void set_device_name(const std::string& device_name);
+		bool set_hid_report_map(const hid::Report_Map& report_map);
 		bool enable();
 		bool connection_status() const;
 		void wait_until_connected();

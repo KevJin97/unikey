@@ -7,11 +7,8 @@
 
 #include <atomic>
 #include <cstdint>
-#include <chrono>
 #include <iostream>
-#include <fstream>
 #include <memory>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -305,8 +302,6 @@ void BlueZ_Interface::subscribe_to_device(const std::string& obj_path)
 						{
 							std::cerr << "Failed to set device as trusted: " << e.getMessage() << std::endl;
 						}
-
-						this->request_connection_parameters(obj_path);
 					}
 					else
 					{
@@ -389,68 +384,6 @@ void BlueZ_Interface::monitor_connection()
 	}
 }
 
-void BlueZ_Interface::request_connection_parameters(const std::string& obj_path) const
-{
-	std::size_t hci_start = obj_path.find("/hci");
-	
-	if (hci_start == std::string::npos)
-		return;
-
-	++hci_start;
-	std::size_t hci_end = obj_path.find('/', hci_start);
-
-	if (hci_end == std::string::npos)
-		return;
-
-	std::string hci = obj_path.substr(hci_start, hci_end - hci_start);
-	std::size_t dev_start = obj_path.find("/dev_");
-
-	if (dev_start == std::string::npos)
-		return;
-
-	dev_start += 5;
-	std::string mac_underscored = obj_path.substr(dev_start);
-	std::string mac = mac_underscored;
-
-	for (std::size_t n = 0; n < mac.size(); ++n)
-	{
-		if (mac[n] == '_')
-			mac[n] = ':';
-	}
-	
-	const std::string base = "/sys/kernel/debug/bluetooth/" + hci + "/" + mac + "/";
-
-	std::thread([base]()
-	{
-		auto write_param = [&base](const char* name, const char* value) -> bool
-		{
-			std::ofstream filename(base + name);
-			
-			if (!filename.is_open())
-				return false;
-
-			filename << value;
-			return filename.good();
-		};
-
-		for (int attempt = 0; attempt < 10; ++attempt)
-		{
-			if (write_param("conn_min_interval", "6") &&
-				write_param("conn_max_interval", "12") &&
-				write_param("conn_latency", "0") &&
-				write_param("supervision_timeout", "200"))
-				{
-					std::cout << "Connection parameters updated: 7.5-15 ms interval" << std::endl;
-					return;
-				}
-			
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-		}
-
-		std::cerr << "Warning: could not write connection parameters to " << base << " (need root privileges or central rejected the request)" << std::endl;
-	}).detach();
-}
-
 BlueZ_Interface::BlueZ_Interface(sdbus::IConnection* dbus_connection, const std::string& connection_name)
 {
 	if (dbus_connection == nullptr)
@@ -516,6 +449,18 @@ void BlueZ_Interface::set_device_name(const std::string& device_name)
 	}
 }
 
+bool BlueZ_Interface::set_hid_report_map(const hid::Report_Map& report_map)
+{
+	if (this->gatt_app == nullptr)
+	{
+		this->hid_report_map = report_map;
+		return true;
+	}
+
+	std::cout << "Bluetooth device has already been registered. Unregister the device before trying to modify the HID report map." << std::endl;
+	return false;
+}
+
 bool BlueZ_Interface::enable()
 {
 	if (this->registered.load(std::memory_order_acquire))
@@ -572,7 +517,7 @@ bool BlueZ_Interface::enable()
 		this->register_agent();
 
 		this->gatt_app = new Application(this->path_name + "/GattApplication", this->dbus_connection);
-		this->gatt_app->add_subelement(new HIDService);
+		this->gatt_app->add_subelement(new HIDService(this->hid_report_map));
 		this->gatt_app->add_subelement(new DeviceInfoService);
 		this->gatt_app->add_subelement(new BatteryService);
 
