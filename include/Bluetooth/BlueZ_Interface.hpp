@@ -76,6 +76,8 @@ class BlueZ_Interface
 		bool orig_pairable_state = false;
 		std::string orig_alias;
 		uint32_t orig_discoverable_timeout = 0;
+		uint16_t adapter_index = 0xFFFF;	// hciN, for the kernel management socket
+		bool restore_bredr = false;			// BR/EDR was on before enable() switched the controller to LE-only
 		std::unique_ptr<sdbus::IObject> ad_object;
 		std::unique_ptr<BlueZ_Agent> agent;
 		std::unique_ptr<sdbus::IProxy> connection_watcher;
@@ -95,6 +97,9 @@ class BlueZ_Interface
 		void unregister_agent();
 		void monitor_connection();
 		void subscribe_to_device(const std::string& obj_path);
+		bool make_controller_le_only();
+		void restore_controller_bredr();
+		bool controller_is_le_only() const;
 
 	public:
 	// PUBLIC CONSTRUCTOR(S)
