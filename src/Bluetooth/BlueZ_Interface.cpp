@@ -11,7 +11,6 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <set>
 #include <string>
 #include <utility>
@@ -151,7 +150,8 @@ void BlueZ_Interface::create_advertisement()
 
 void BlueZ_Interface::register_advertisement()
 {
-	if (!this->bluez_proxy) return;
+	if (!this->bluez_proxy)
+		return;
 
 	try
 	{
@@ -185,7 +185,8 @@ void BlueZ_Interface::register_advertisement()
 
 void BlueZ_Interface::register_gatt_application()
 {
-	if (!this->bluez_proxy) return;
+	if (!this->bluez_proxy)
+		return;
 
 	std::cout << "Registering GATT application at: " << this->gatt_app->get_full_path() << std::endl;
 
@@ -221,7 +222,8 @@ void BlueZ_Interface::register_gatt_application()
 
 void BlueZ_Interface::register_agent()
 {
-	if (!this->dbus_connection) return;
+	if (!this->dbus_connection)
+		return;
 
 	std::string agent_path = this->path_name + "/agent";
 	this->agent = std::make_unique<BlueZ_Agent>(*this->dbus_connection, agent_path);
@@ -251,7 +253,8 @@ void BlueZ_Interface::register_agent()
 
 void BlueZ_Interface::unregister_advertisement()
 {
-	if (!this->bluez_proxy || !this->advertising.load(std::memory_order_acquire)) return;
+	if (!this->bluez_proxy || !this->advertising.load(std::memory_order_acquire))
+		return;
 	
 	try
 	{
@@ -312,14 +315,23 @@ void BlueZ_Interface::unregister_agent()
 // disconnecting must not silence the HID host.
 void BlueZ_Interface::set_device_connected(const std::string& obj_path, bool connected)
 {
-	bool newly_connected = false;
-	{
-		std::lock_guard<std::mutex> lock(this->device_mutex);
-		newly_connected = connected ? this->connected_devices.insert(obj_path).second : false;
-		if (!connected && this->connected_devices.erase(obj_path) == 0) return;
+	static std::atomic_bool accessing_connected_devices = false;
 
-		this->connected_to_host.store(!this->connected_devices.empty(), std::memory_order_release);
+	while (accessing_connected_devices.exchange(true, std::memory_order_acquire))
+	{
+		accessing_connected_devices.wait(true, std::memory_order_acquire);
 	}
+
+	bool newly_connected = connected ? this->connected_devices.insert(obj_path).second : false;
+	
+	if (!connected && this->connected_devices.erase(obj_path) == 0) 
+		return;
+
+	this->connected_to_host.store(!this->connected_devices.empty(), std::memory_order_release);
+
+	accessing_connected_devices.store(false, std::memory_order_release);
+	accessing_connected_devices.notify_one();
+
 	this->connected_to_host.notify_all();
 
 	if (!connected)
@@ -327,9 +339,12 @@ void BlueZ_Interface::set_device_connected(const std::string& obj_path, bool con
 		std::cout << "Bluetooth device disconnected: " << obj_path << std::endl;
 		return;
 	}
-	if (!newly_connected) return;
+
+	if (!newly_connected)
+		return;
 
 	std::cout << "Bluetooth device connected: " << obj_path << std::endl;
+
 	try
 	{
 		// Mark as trusted so the device can reconnect without
@@ -347,15 +362,21 @@ void BlueZ_Interface::set_device_connected(const std::string& obj_path, bool con
 
 void BlueZ_Interface::subscribe_to_device(const std::string& obj_path)
 {
-	std::unique_ptr<sdbus::IProxy> device_proxy;
+	while (this->accessing_proxy_list.exchange(true, std::memory_order_acquire))
 	{
-		std::lock_guard<std::mutex> lock(this->device_mutex);
-		if (this->device_proxies.contains(obj_path)) return;	// Already watching
+		this->accessing_proxy_list.wait(true, std::memory_order_acquire);
 	}
+	
+	if (this->device_proxies.contains(obj_path))	// Already watching
+		return;
+
+	this->accessing_proxy_list.store(false, std::memory_order_release);
+	this->accessing_proxy_list.notify_one();
 
 	// The proxy is kept in device_proxies: destroying it would drop the
 	// PropertiesChanged subscription.
-	device_proxy = sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path);
+	std::unique_ptr<sdbus::IProxy> device_proxy = sdbus::createProxy(*this->dbus_connection, "org.bluez", obj_path);
+
 	device_proxy->uponSignal("PropertiesChanged")
 		.onInterface("org.freedesktop.DBus.Properties")
 			.call(
@@ -382,10 +403,15 @@ void BlueZ_Interface::subscribe_to_device(const std::string& obj_path)
 		std::cerr << "Could not read connection state of " << obj_path << ": " << e.getMessage() << std::endl;
 	}
 
+	while (this->accessing_proxy_list.exchange(true, std::memory_order_acquire))
 	{
-		std::lock_guard<std::mutex> lock(this->device_mutex);
-		this->device_proxies.emplace(obj_path, std::move(device_proxy));
+		this->accessing_proxy_list.wait(true, std::memory_order_acquire);
 	}
+
+	this->device_proxies.emplace(obj_path, std::move(device_proxy));
+
+	this->accessing_proxy_list.store(false, std::memory_order_release);
+	this->accessing_proxy_list.notify_one();
 
 	if (connected)
 		this->set_device_connected(obj_path, true);
@@ -424,8 +450,16 @@ void BlueZ_Interface::monitor_connection()
 				return;
 
 			this->set_device_connected(obj_path, false);
-			std::lock_guard<std::mutex> lock(this->device_mutex);
+
+			while (this->accessing_proxy_list.exchange(true, std::memory_order_acquire))
+			{
+				this->accessing_proxy_list.wait(true, std::memory_order_acquire);
+			}
+
 			this->device_proxies.erase(obj_path);
+
+			this->accessing_proxy_list.store(false, std::memory_order_release);
+			this->accessing_proxy_list.notify_one();
 		}
 	);
 
@@ -642,11 +676,18 @@ void BlueZ_Interface::disable()
 	}
 
 	this->connection_watcher.reset();
+
+	while (this->accessing_proxy_list.exchange(true, std::memory_order_acquire))
 	{
-		std::lock_guard<std::mutex> lock(this->device_mutex);
-		this->device_proxies.clear();
-		this->connected_devices.clear();
+		this->accessing_proxy_list.wait(true, std::memory_order_acquire);
 	}
+
+	this->device_proxies.clear();
+	this->connected_devices.clear();
+
+	this->accessing_proxy_list.store(false, std::memory_order_release);
+	this->accessing_proxy_list.notify_all();
+	
 	this->ad_object.reset();
 	this->bluez_proxy.reset();
 
@@ -700,16 +741,23 @@ void BlueZ_Interface::send_hid_report(uint8_t report_id, const std::vector<uint8
 	// whose desc0 (Report Reference) matches [report_id, 0x01=Input].
 	// This is robust to any reordering of characteristics in HIDService.
 	Characteristic* target = nullptr;
-	for (std::size_t i = 0; ; ++i)
+
+	for (std::size_t n = 0; ; ++n)
 	{
-		const Base_App_Obj* child = hid_service->get_subelement(i);
-		if (child == nullptr) break;
-		if (child->get_uuid() != "2a4d") continue;
+		const Base_App_Obj* child = hid_service->get_subelement(n);
+
+		if (child == nullptr)
+			break;
+
+		if (child->get_uuid() != "2a4d")
+			continue;
 
 		const Base_App_Obj* desc0 = child->get_subelement(0);
-		if (desc0 == nullptr) continue;
+		if (desc0 == nullptr)
+			continue;
 
 		ByteArray ref = ((Descriptor*)desc0)->on_read_value({});
+
 		if (ref.size() >= 2 && ref[0] == report_id && ref[1] == 0x01)
 		{
 			target = (Characteristic*)child;

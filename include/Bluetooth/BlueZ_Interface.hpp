@@ -10,7 +10,6 @@
 #include <atomic>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -65,6 +64,8 @@ class BlueZ_Agent_Manager_Proxy : public sdbus::ProxyInterfaces<org::bluez::Agen
 
 class BlueZ_Interface
 {
+	static inline std::atomic_bool accessing_proxy_list{false};
+	
 	private:
 	// MEMBER DATA
 		std::unique_ptr<sdbus::IConnection> new_connection;
@@ -81,9 +82,9 @@ class BlueZ_Interface
 		std::unique_ptr<sdbus::IObject> ad_object;
 		std::unique_ptr<BlueZ_Agent> agent;
 		std::unique_ptr<sdbus::IProxy> connection_watcher;
-		std::mutex device_mutex;	// Guards device_proxies and connected_devices
 		std::map<std::string, std::unique_ptr<sdbus::IProxy>> device_proxies;
 		std::set<std::string> connected_devices;
+
 		std::atomic_bool connected_to_host = false;
 		std::atomic_bool advertising = false;
 		std::atomic_bool registered = false;
