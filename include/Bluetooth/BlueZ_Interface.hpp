@@ -3,10 +3,15 @@
 
 #include "Bluetooth/Gatt/Application.hpp"
 #include "Bluetooth/BlueZ_Agent.hpp"
+#include "Bluetooth/bluetooth_configs.hpp"
 #include "Bluetooth/org_bluez_agent_manager_proxy.hpp"
 #include "Bluetooth/org_bluez_proxy.hpp"
 
+#include <atomic>
+#include <map>
 #include <memory>
+#include <set>
+#include <string>
 #include <vector>
 
 #include <sdbus-c++/IConnection.h>
@@ -59,6 +64,8 @@ class BlueZ_Agent_Manager_Proxy : public sdbus::ProxyInterfaces<org::bluez::Agen
 
 class BlueZ_Interface
 {
+	static inline std::atomic_bool accessing_proxy_list{false};
+	
 	private:
 	// MEMBER DATA
 		std::unique_ptr<sdbus::IConnection> new_connection;
@@ -66,17 +73,18 @@ class BlueZ_Interface
 		std::string device_name = "BlueZ Interface";
 		std::string path_name;
 		Application* gatt_app = nullptr;
+		hid::Report_Map hid_report_map;	// Keyboard/mouse/consumer only until set_hid_report_map()
 		std::unique_ptr<BlueZ_Adapter_Proxy> bluez_proxy;
 		std::unique_ptr<BlueZ_Agent_Manager_Proxy> bluez_agent_man_proxy;
 		bool orig_powered_state = false;
-		bool orig_discover_state = false;
 		bool orig_pairable_state = false;
 		std::string orig_alias;
-		uint32_t orig_discoverable_timeout = 0;
 		std::unique_ptr<sdbus::IObject> ad_object;
 		std::unique_ptr<BlueZ_Agent> agent;
 		std::unique_ptr<sdbus::IProxy> connection_watcher;
-		std::vector<std::unique_ptr<sdbus::IProxy>> device_proxies;
+		std::map<std::string, std::unique_ptr<sdbus::IProxy>> device_proxies;
+		std::set<std::string> connected_devices;
+
 		std::atomic_bool connected_to_host = false;
 		std::atomic_bool advertising = false;
 		std::atomic_bool registered = false;
@@ -92,7 +100,7 @@ class BlueZ_Interface
 		void unregister_agent();
 		void monitor_connection();
 		void subscribe_to_device(const std::string& obj_path);
-		void request_connection_parameters(const std::string& obj_path) const;
+		void set_device_connected(const std::string& obj_path, bool connected);
 
 	public:
 	// PUBLIC CONSTRUCTOR(S)
@@ -108,6 +116,7 @@ class BlueZ_Interface
 	// PUBLIC INTERFACE
 		void set_path_name(const std::string& path_name);
 		void set_device_name(const std::string& device_name);
+		bool set_hid_report_map(const hid::Report_Map& report_map);
 		bool enable();
 		bool connection_status() const;
 		void wait_until_connected();

@@ -291,6 +291,11 @@ void Device::default_event_processor(const void* data, uint64_t unit_size)
 	const struct input_event* ev = (struct input_event*)(&LENGTH + 1);
 	for (uint64_t n = 0; n < LENGTH; ++n)
 	{
+		if (ev[n].type == EV_KEY && ev[n].code == KEY_POWER)
+		{
+			continue;
+		}
+		
 		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
 	}
 	std::cout << std::endl;
@@ -343,10 +348,10 @@ void Device::input_monitor_process()
 	enum libevdev_read_flag read_flag = LIBEVDEV_READ_FLAG_NORMAL;
 	/* 
 		Allocate generic memory block
-		Memory structure:
-		{ uint64_t, struct input_event[64] }
+		Memory structure: see Device::EVENT_BATCH_* in Device.hpp
+		{ uint64_t count, struct input_event[EVENT_BATCH_CAPACITY + 1], uint64_t source_id }
 	*/
-	void* p_data = malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);
+	void* p_data = malloc(Device::EVENT_BATCH_BYTES);
 	uint64_t* p_event_count = (uint64_t*)p_data;
 	struct input_event* event_queue = (struct input_event*)(p_event_count + 1);
 	*p_event_count = 0;
@@ -403,6 +408,7 @@ void Device::input_monitor_process()
 						case EV_SYN:
 							if (*p_event_count && event_queue[*p_event_count].value == SYN_REPORT && this->device_is_grabbed)
 							{
+								Device::set_batch_source(p_data, this->id);
 								Device::global_queue.push(p_data);
 								write(Device::poll_signal_fd, &add_to_count, sizeof(uint64_t));	// Write to polling eventfd
 								Device::pending_events.fetch_add(1, std::memory_order_acq_rel); // Notify watchdog
@@ -410,7 +416,7 @@ void Device::input_monitor_process()
 								
 								(Device::global_mem_bank.size())
 									? p_data = Device::global_mem_bank.pop()	// Use available buffer
-									: p_data = malloc(sizeof(uint64_t) + sizeof(struct input_event) * 64);	// Create new buffer
+									: p_data = malloc(Device::EVENT_BATCH_BYTES);	// Create new buffer
 								
 								p_event_count = (uint64_t*)p_data;
 								event_queue = (struct input_event*)(p_event_count + 1);
@@ -440,7 +446,7 @@ void Device::input_monitor_process()
 								Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
 								// Only register a key release when there are no keys being pressed down
 								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_sub(1, std::memory_order_acq_rel) == 1)
-									++*p_event_count;
+									Device::accept_event(p_event_count);
 
 								--key_press_cnt;
 							}
@@ -448,7 +454,7 @@ void Device::input_monitor_process()
 							{
 								Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
 								if (Device::global_key_state[event_queue[*p_event_count].code].fetch_add(1, std::memory_order_acq_rel) == 0)
-									++*p_event_count;
+									Device::accept_event(p_event_count);
 								
 								++key_press_cnt;
 							}
@@ -456,24 +462,11 @@ void Device::input_monitor_process()
 
 						case EV_REL:
 							if (event_queue[*p_event_count].value != 0)
-								++*p_event_count;
+								Device::accept_event(p_event_count);
 							break;
 
 						case EV_ABS:
-							if (event_queue[*p_event_count].code == ABS_MT_TRACKING_ID)
-							{
-								if (event_queue[*p_event_count].value != -1)
-								{
-									Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
-									++key_press_cnt;
-								}
-								else
-								{
-									Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
-									--key_press_cnt;
-								}
-							}
-							++*p_event_count;
+							Device::accept_event(p_event_count);
 							break;
 
 						default:
@@ -622,6 +615,47 @@ BitField Device::return_enabled_global_rel_states()
 		}
 	}
 	return enabled_codes;
+}
+
+void Device::accept_event(uint64_t* p_event_count)
+{
+	// Events past capacity are read into the scratch slot and discarded
+	// rather than written past the end of the batch buffer.
+	if (*p_event_count < Device::EVENT_BATCH_CAPACITY)
+		++*p_event_count;
+}
+
+void Device::set_batch_source(void* data, unsigned id)
+{
+	const uint64_t source = id;
+	std::memcpy(static_cast<uint8_t*>(data) + Device::EVENT_BATCH_SOURCE_OFFSET, &source, sizeof(source));
+}
+
+unsigned Device::return_batch_source(const void* data)
+{
+	uint64_t source = 0;
+	std::memcpy(&source, static_cast<const uint8_t*>(data) + Device::EVENT_BATCH_SOURCE_OFFSET, sizeof(source));
+	return static_cast<unsigned>(source);
+}
+
+std::vector<Device_Capabilities> Device::return_device_capabilities()
+{
+	std::vector<Device_Capabilities> capabilities;
+	for (const Device* device : Device::device_objects)
+	{
+		if (device == nullptr || device->dev == nullptr)
+			continue;
+
+		Device_Capabilities caps;
+		caps.id = device->id;
+		const char* name = libevdev_get_name(device->dev);
+		caps.name = name ? name : "";
+		caps.properties = device->return_enabled_local_properties();
+		caps.key_codes = device->return_enabled_local_key_states();
+		caps.absinfo = device->return_enabled_local_absinfo();
+		capabilities.push_back(std::move(caps));
+	}
+	return capabilities;
 }
 
 void Device::wait_for_exit()
