@@ -659,8 +659,16 @@ static void process_hid_events(const void* data, uint64_t /*unit_size*/)
 
 		switch (ev.type)
 		{
-			case EV_KEY: handle_key_event(ev, mouse_dirty, keyboard_dirty, consumer_dirty); break;
-			case EV_REL: handle_rel_event(ev, mouse_dirty); break;
+			case EV_KEY: 
+				if (ev.code == KEY_POWER)
+				{
+					continue;
+				}
+				handle_key_event(ev, mouse_dirty, keyboard_dirty, consumer_dirty);
+				break;
+
+			case EV_REL: handle_rel_event(ev, mouse_dirty);
+				break;
 		}
 	}
 
