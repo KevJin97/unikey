@@ -291,6 +291,11 @@ void Device::default_event_processor(const void* data, uint64_t unit_size)
 	const struct input_event* ev = (struct input_event*)(&LENGTH + 1);
 	for (uint64_t n = 0; n < LENGTH; ++n)
 	{
+		if (ev[n].type == EV_KEY && ev[n].code == KEY_POWER)
+		{
+			continue;
+		}
+		
 		std::cout << libevdev_event_code_get_name(ev[n].type, ev[n].code) << ',' << ev[n].value << ((n % 4 == 3) ? "\n" : "\t\t");
 	}
 	std::cout << std::endl;
@@ -461,19 +466,6 @@ void Device::input_monitor_process()
 							break;
 
 						case EV_ABS:
-							if (event_queue[*p_event_count].code == ABS_MT_TRACKING_ID)
-							{
-								if (event_queue[*p_event_count].value != -1)
-								{
-									Device::global_key_press_cnt.fetch_add(1, std::memory_order_acq_rel);
-									++key_press_cnt;
-								}
-								else
-								{
-									Device::global_key_press_cnt.fetch_sub(1, std::memory_order_acq_rel);
-									--key_press_cnt;
-								}
-							}
 							Device::accept_event(p_event_count);
 							break;
 
