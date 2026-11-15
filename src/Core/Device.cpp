@@ -40,7 +40,7 @@ void Device::set_event_processor(void (*event_processing_function)(const void*, 
 	{
 		Device::is_grabbed.wait(true, std::memory_order_acquire);
 	}
-	while (uint32_t ev_left = Device::pending_events.load(std::memory_order_release))
+	while (uint32_t ev_left = Device::pending_events.load(std::memory_order_acquire))
 	{
 		Device::pending_events.wait(ev_left, std::memory_order_acquire);
 	}
@@ -107,7 +107,7 @@ unsigned Device::set_timeout_length(unsigned int seconds)
 	{
 		Device::is_grabbed.wait(true, std::memory_order_acquire);
 	}
-	while (uint32_t ev_left = Device::pending_events.load(std::memory_order_release))
+	while (uint32_t ev_left = Device::pending_events.load(std::memory_order_acquire))
 	{
 		Device::pending_events.wait(ev_left, std::memory_order_acquire);
 	}
@@ -131,7 +131,7 @@ bool Device::trigger_activation()
 
 	uint64_t message = Device::active_devices.load(std::memory_order_acquire);
 	write(Device::event_signal_fd, &message, sizeof(uint64_t));
-	Device::pending_reads.store(message, std::memory_order_acq_rel);
+	Device::pending_reads.store(message, std::memory_order_release);
 
 	Device::is_grabbed.notify_all();
 	return !prev_state;
