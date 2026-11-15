@@ -323,11 +323,10 @@ void BlueZ_Interface::set_device_connected(const std::string& obj_path, bool con
 	}
 
 	bool newly_connected = connected ? this->connected_devices.insert(obj_path).second : false;
+	this->connected_to_host.store(!this->connected_devices.empty(), std::memory_order_release);
 	
 	if (!connected && this->connected_devices.erase(obj_path) == 0) 
 		return;
-
-	this->connected_to_host.store(!this->connected_devices.empty(), std::memory_order_release);
 
 	accessing_connected_devices.store(false, std::memory_order_release);
 	accessing_connected_devices.notify_one();
